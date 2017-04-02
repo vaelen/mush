@@ -84,6 +84,15 @@ func addCommands(c *Connection) {
 			c.Look()
         },
     })
+
+	shell.AddCmd(&ishell.Cmd{
+        Name: "who",
+        Help: "see who's online",
+        Func: func(e *ishell.Context) {
+			c.Who()
+        },
+    })
+
 }
 
 func (c *Connection) Say(target string, phrase string) {
@@ -181,6 +190,20 @@ func (c *Connection) Look() {
 	s += r.Desc + "\n"
 	for _, pName := range playersHere {
 		s += fmt.Sprintf("You see %s here.\n", pName)
+	}
+	s += "\n"
+	c.Printf(s)
+}
+
+func (c *Connection) Who() {
+	s := "Players Currently Online:\n"
+	f := "%30s %30s\n"
+	s += fmt.Sprintf(f, "Player", "Location")
+	h30 := "------------------------------"
+	s += fmt.Sprintf(f, h30, h30)
+	for _, conn := range c.Server.Connections() {
+		p := conn.Player
+		s += fmt.Sprintf(f, p.Name, fmt.Sprintf("%s [%d]", p.Room.Name, p.Room.Id))
 	}
 	s += "\n"
 	c.Printf(s)

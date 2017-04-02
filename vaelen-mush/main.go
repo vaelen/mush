@@ -20,10 +20,15 @@ along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
+	"os"
 	"github.com/vaelen/mush"
 )
 
 func main() {
+	addr := ":2222"
+	if len(os.Args) > 1 {
+		addr = os.Args[1]
+	}
 	s := mush.NewServer()
-	s.StartServer(":5555")	
+	s.StartServer(addr)
 }
