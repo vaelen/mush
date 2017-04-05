@@ -195,12 +195,13 @@ func (c *Connection) Look() {
 // TODO: Have the column widths auto-adjust to fit the data
 func (c *Connection) Who() {
 	s := "Players Currently Online:\n"
-	f := "%10s %20s %20s %30s %10s\n"
+	f := "%10s %20s %20s %30s %15s\n"
 	s += fmt.Sprintf(f, "Connection", "Player", "Location", "Connected", "Idle")
 	h10 := "----------"
+	h15 := "---------------"
 	h20 := "--------------------"
 	h30 := "------------------------------"
-	s += fmt.Sprintf(f, h10, h20, h20, h30, h10)
+	s += fmt.Sprintf(f, h10, h20, h20, h30, h15)
 	for _, conn := range c.Server.Connections() {
 		playerName := "[Authenticating]"
 		roomName := "[UNKNOWN]"
@@ -217,7 +218,7 @@ func (c *Connection) Who() {
 		connId := fmt.Sprintf("%10d", conn.Id)
 		roomString := fmt.Sprintf("%s [%d]", roomName, roomId)
 		connected := conn.Connected.Format(time.RFC1123)
-		idle := time.Since(c.LastActed).String()
+		idle := time.Since(conn.LastActed).String()
 		
 		s += fmt.Sprintf(f, connId, playerName, roomString, connected, idle)
 
