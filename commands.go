@@ -22,6 +22,7 @@ package mush
 import (
 	"fmt"
 	"strings"
+	"time"
 	"github.com/vaelen/ishell"
 )
 
@@ -67,6 +68,7 @@ func addCommands(c *Connection) {
 		LongHelp: "whisper name \"message\"",
         Func: func(e *ishell.Context) {
 			if len(e.Args) > 1 {
+				c.updateIdleTime()
 				target := e.Args[0]
 				phrase := e.Args[1]
 				c.Log("Executing Whisper: %s - %s", target, phrase)
@@ -81,6 +83,7 @@ func addCommands(c *Connection) {
         Name: "look",
         Help: "look around",
         Func: func(e *ishell.Context) {
+			c.updateIdleTime()
 			c.Look()
         },
     })
@@ -89,22 +92,21 @@ func addCommands(c *Connection) {
         Name: "who",
         Help: "see who's online",
         Func: func(e *ishell.Context) {
+			c.updateIdleTime()
 			c.Who()
         },
     })
 
 }
 
-func (c *Connection) Say(target string, phrase string) {
-	t := strings.ToLower(target)
-	targetName := ""
-	var targetId IdType
-	targetId = 0
-	conns := c.Server.Connections()
+func (c *Connection) updateIdleTime() {
+	c.LastActed = time.Now()
+}
 
-	// Find target name
-	if target != "" {
-		for _, conn := range conns {
+func (c *Connection) findPlayerConnectionByName(target string) (targetId IdType, targetName string) {
+	t := strings.ToLower(target)
+	for _, conn := range c.Server.Connections() {
+		if conn.Authenticated && conn.Player != nil {
 			n := strings.ToLower(conn.Player.Name)
 			if t == n {
 				targetId = conn.Id
@@ -112,7 +114,14 @@ func (c *Connection) Say(target string, phrase string) {
 				break
 			}
 		}
+	}
+	return
+}
 
+func (c *Connection) Say(target string, phrase string) {
+	targetId, targetName := c.findPlayerConnectionByName(target)
+	
+	if target != "" {
 		if targetName == "" {
 			c.Printf("Couldn't find player %s\n", target)
 			return
@@ -120,8 +129,10 @@ func (c *Connection) Say(target string, phrase string) {
 	}
 
 	// Send messages
-	for _, conn := range conns {
+	for _, conn := range c.Server.Connections() {
 		switch {
+		case !conn.Authenticated:
+			// Do Nothing
 		case conn.Id == c.Id:
 			// Do Nothing
 		case conn.Id == targetId && target != "":
@@ -141,28 +152,14 @@ func (c *Connection) Say(target string, phrase string) {
 }
 
 func (c *Connection) Whisper(target string, phrase string) {
-	t := strings.ToLower(target)
-	targetName := ""
-	var targetId IdType
-	targetId = 0
-	conns := c.Server.Connections()
-
-	// Find target name
-	for _, conn := range conns {
-		n := strings.ToLower(conn.Player.Name)
-		if t == n {
-			targetId = conn.Id
-			targetName = conn.Player.Name
-			break
-		}
-	}
+	targetId, targetName := c.findPlayerConnectionByName(target)
 
 	if targetName == "" {
 		c.Printf("Couldn't find player %s\n", target)
 		return
 	}
 
-	for _, conn := range conns {
+	for _, conn := range c.Server.Connections() {
 		switch {
 		case conn.Id == c.Id:
 			// Do Nothing
@@ -182,7 +179,7 @@ func (c *Connection) Look() {
 	playersHere := make([]string,0)
 	for _, conn := range c.Server.Connections() {
 		p := conn.Player
-		if cId != conn.Id && rId == p.Room.Id {
+		if conn.Authenticated && p != nil && p.Room != nil && cId != conn.Id && rId == p.Room.Id {
 			playersHere = append(playersHere, p.Name)
 		}
 	}
@@ -195,15 +192,35 @@ func (c *Connection) Look() {
 	c.Printf(s)
 }
 
+// TODO: Have the column widths auto-adjust to fit the data
 func (c *Connection) Who() {
 	s := "Players Currently Online:\n"
-	f := "%30s %30s\n"
-	s += fmt.Sprintf(f, "Player", "Location")
+	f := "%10s %20s %20s %30s %10s\n"
+	s += fmt.Sprintf(f, "Connection", "Player", "Location", "Connected", "Idle")
+	h10 := "----------"
+	h20 := "--------------------"
 	h30 := "------------------------------"
-	s += fmt.Sprintf(f, h30, h30)
+	s += fmt.Sprintf(f, h10, h20, h20, h30, h10)
 	for _, conn := range c.Server.Connections() {
-		p := conn.Player
-		s += fmt.Sprintf(f, p.Name, fmt.Sprintf("%s [%d]", p.Room.Name, p.Room.Id))
+		playerName := "[Authenticating]"
+		roomName := "[UNKNOWN]"
+		var roomId IdType
+
+		if conn.Authenticated && conn.Player != nil {
+			playerName = conn.Player.Name
+			if conn.Player.Room != nil {
+				roomName = conn.Player.Room.Name
+				roomId = conn.Player.Room.Id
+			}
+		}
+
+		connId := fmt.Sprintf("%10d", conn.Id)
+		roomString := fmt.Sprintf("%s [%d]", roomName, roomId)
+		connected := conn.Connected.Format(time.RFC1123)
+		idle := time.Since(c.LastActed).String()
+		
+		s += fmt.Sprintf(f, connId, playerName, roomString, connected, idle)
+
 	}
 	s += "\n"
 	c.Printf(s)

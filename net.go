@@ -26,6 +26,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 	"github.com/vaelen/ishell"
 	"gopkg.in/readline.v1"
 )
@@ -52,6 +53,9 @@ type Connection struct {
 	Player *Player
 	Shell *ishell.Shell
 	Server *Server
+	Authenticated bool
+	Connected time.Time
+	LastActed time.Time
 }
 
 type Server struct {
@@ -98,6 +102,8 @@ func (s *Server) NewConnection(conn net.Conn) *Connection {
 			Name: "[UNKNOWN]",
 		},
 		Server: s,
+		Connected: time.Now(),
+		LastActed: time.Now(),
 	}
 	ack := make(chan bool)
 	s.cm.Opened <- ConnectionStateChange{c: c, ack: ack}
@@ -106,8 +112,7 @@ func (s *Server) NewConnection(conn net.Conn) *Connection {
 }
 
 func (s *Server) Connections() []*Connection {
-	c := s.cm.connections
-	return c
+	return s.cm.Connections()
 }
 
 func (c *Connection) String() string {
@@ -121,19 +126,28 @@ func (c *Connection) Log(format string, a ...interface{}) {
 }
 
 func (c *Connection) Printf(format string, a ...interface{}) {
-	c.Shell.Printf(format, a...)
+	if c.Shell != nil {
+		c.Shell.Printf(format, a...)
+	}
 }
 
 func (c *Connection) ReadLine() (string, error) {
-	return c.Shell.ReadLine()
+	if c.Shell != nil {
+		return c.Shell.ReadLine()
+	} else {
+		return "", nil
+	}
 }
 
 func (c *Connection) Close() {
 	defer c.C.Close()
 	c.Log("Connection closed")
-	if c.Player != nil && c.Player.Name != "" {
+	if c.Authenticated && c.Player != nil {
 		c.Server.Wall("%s disapears in a puff of smoke.\n", c.Player.Name)
 	}
+	ack := make(chan bool)
+	c.Server.cm.Closed <- ConnectionStateChange{c: c, ack: ack}
+	<-ack
 }
 
 func connectionWorker(c *Connection) {
@@ -258,6 +272,7 @@ func Login(c *Connection) (bool, error) {
 		}
 	}
 	c.Player = p
+	c.Authenticated = true
 	c.Log("Logged In Successfully")
 	return isNew, nil
 }

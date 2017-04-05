@@ -21,10 +21,12 @@ package mush
 
 import (
 	"log"
+	"sync"
 )
 
 type ConnectionManager struct {
 	connections []*Connection
+	connMutex sync.RWMutex
 	nextConnectionId IdType
 	Opened chan ConnectionStateChange
 	Closed chan ConnectionStateChange
@@ -35,27 +37,78 @@ type ConnectionStateChange struct {
 	ack chan bool
 }
 
+func (m *ConnectionManager) Connections() []*Connection {
+	m.connMutex.RLock()
+	defer m.connMutex.RUnlock()
+	c := make([]*Connection, 0, len(m.connections))
+	c = append(c, m.connections...)
+	return c
+}
+
+// This method is not threadsafe
+func (m *ConnectionManager) findConnection(id IdType) int {
+	i := -1
+	for n, c := range m.connections {
+		if c.Id == id {
+			i = n
+			break
+		}
+	}
+	return i
+}
+
+func (m *ConnectionManager) AddConnection(c *Connection) {
+	log.Println("Got Connection")
+	m.connMutex.Lock()
+	defer m.connMutex.Unlock()
+	if m.findConnection(c.Id) > -1 {
+		// Connection is already in the list
+		return
+	}
+	i := m.nextConnectionId
+	m.nextConnectionId++
+	c.Id = i
+	m.connections = append(m.connections, c)
+	log.Printf("Open Connections: %d\n", len(m.connections))	
+}
+
+func (m *ConnectionManager) RemoveConnection(c *Connection) {
+	log.Println("Connection Closed")
+	m.connMutex.Lock()
+	defer m.connMutex.Unlock()
+	// Find element to be removed
+	i := m.findConnection(c.Id)
+	if i < 0 {
+		// Connection is not in the list
+		return
+	}
+	// Delete the removed element (without possible memory leak)
+	copy(m.connections[i:], m.connections[i+1:])
+	m.connections[len(m.connections)-1] = nil
+	m.connections = m.connections[:len(m.connections)-1]
+	log.Printf("Open Connections: %d\n", len(m.connections))	
+}
+
 func (m *ConnectionManager) OpenedConnectionListener() func() {
 	return func() {
 		log.Println("Opened Connection Listener Started")
 		defer log.Println("Opened Connection Listener Stopped")
 		for {
 			e := <-m.Opened
-			log.Println("Got Connection")
-			i := m.nextConnectionId
-			m.nextConnectionId++
-			e.c.Id = i
-			m.connections = append(m.connections, e.c)
-			log.Printf("Connection Count: %d\n", len(m.connections))
+			m.AddConnection(e.c)
 			e.ack <- true
 		}
 	}
 }
 
-
 func (m *ConnectionManager) ClosedConnectionListener() func() {
 	return func() {
 		log.Println("Closed Connection Listener Started")
 		defer log.Println("Closed Connection Listener Stopped")
+		for {
+			e := <-m.Closed
+			m.RemoveConnection(e.c)
+			e.ack <- true
+		}
 	}
 }
