@@ -41,7 +41,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
         Name: "say",
-        Help: "say something to the everybody else",
+        Help: "say something to the everybody else. say [player] <message>",
 		LongHelp: "say [name] \"message\"",
         Func: func(e *ishell.Context) {
 			if len(e.Args) > 0 {
@@ -64,7 +64,7 @@ func addCommands(c *Connection) {
 	
 	shell.AddCmd(&ishell.Cmd{
         Name: "whisper",
-        Help: "whisper something to the somebody else",
+        Help: "whisper something to the somebody else. whisper <player> <message>",
 		LongHelp: "whisper name \"message\"",
         Func: func(e *ishell.Context) {
 			if len(e.Args) > 1 {
@@ -73,6 +73,22 @@ func addCommands(c *Connection) {
 				phrase := e.Args[1]
 				c.Log("Executing Whisper: %s - %s", target, phrase)
 				c.Whisper(target, phrase)
+			} else {
+				c.Printf(e.Cmd.HelpText())
+			}
+        },
+    })
+
+	shell.AddCmd(&ishell.Cmd{
+        Name: "emote",
+        Help: "emote something. emote <action>",
+		LongHelp: "emote \"action\"",
+        Func: func(e *ishell.Context) {
+			if len(e.Args) > 0 {
+				c.updateIdleTime()
+				action := e.Args[0]
+				c.Log("Executing Emote: %s", action)
+				c.Emote(action)
 			} else {
 				c.Printf(e.Cmd.HelpText())
 			}
@@ -161,6 +177,8 @@ func (c *Connection) Whisper(target string, phrase string) {
 
 	for _, conn := range c.Server.Connections() {
 		switch {
+		case !conn.Authenticated:
+			// Do Nothing
 		case conn.Id == c.Id:
 			// Do Nothing
 		case conn.Id == targetId:
@@ -170,6 +188,17 @@ func (c *Connection) Whisper(target string, phrase string) {
 		}
 	}
 	c.Printf("You whisper \"%s\" to %s.\n", phrase, targetName)
+}
+
+func (c *Connection) Emote(action string) {
+	for _, conn := range c.Server.Connections() {
+		switch {
+		case !conn.Authenticated:
+			// Do Nothing
+		default:
+			conn.Printf("%s %s.\n", c.Player.Name, action)
+		}
+	}
 }
 
 func (c *Connection) Look() {
