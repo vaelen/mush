@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"github.com/vaelen/ishell"
+	"github.com/abiosoft/ishell"
 )
 
 func addCommands(c *Connection) {

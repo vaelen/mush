@@ -27,7 +27,7 @@ import (
 	"net"
 	"strings"
 	"time"
-	"github.com/vaelen/ishell"
+	"github.com/abiosoft/ishell"
 	"gopkg.in/readline.v1"
 )
 
@@ -131,11 +131,11 @@ func (c *Connection) Printf(format string, a ...interface{}) {
 	}
 }
 
-func (c *Connection) ReadLine() (string, error) {
+func (c *Connection) ReadLine() string {
 	if c.Shell != nil {
 		return c.Shell.ReadLine()
 	} else {
-		return "", nil
+		return ""
 	}
 }
 
