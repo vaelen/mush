@@ -113,6 +113,45 @@ func addCommands(c *Connection) {
         },
     })
 
+	shell.AddCmd(&ishell.Cmd{
+        Name: "save",
+        Help: "save world state (admin)",
+        Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if c.IsAdmin() {
+				c.Printf("Saving world state...")
+				ack := make(chan error)
+				c.Server.World.SaveWorldState <- SaveWorldStateMessage{Ack: ack}
+				err := <-ack
+				if err != nil {
+					c.Printf("Error: %s\n", err.Error())
+				} else {
+					c.Printf("Complete\n")
+				}
+			} else {
+				c.Printf("Not Authorized\n")
+			}
+        },
+    })
+
+	shell.AddCmd(&ishell.Cmd{
+        Name: "shutdown",
+        Help: "shutdown server (admin)",
+        Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if c.IsAdmin() {
+				c.Printf("Shutting down the server...\n")
+				c.Server.Shutdown <- true
+			} else {
+				c.Printf("Not Authorized\n")
+			}
+        },
+    })
+
+}
+
+func (c *Connection) IsAdmin() bool {
+	return c != nil && c.Authenticated && c.Player != nil && c.Player.Admin
 }
 
 func (c *Connection) updateIdleTime() {

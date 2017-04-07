@@ -30,6 +30,7 @@ type ConnectionManager struct {
 	nextConnectionId IdType
 	Opened chan ConnectionStateChange
 	Closed chan ConnectionStateChange
+	Shutdown chan bool
 }
 
 type ConnectionStateChange struct {
@@ -89,26 +90,24 @@ func (m *ConnectionManager) RemoveConnection(c *Connection) {
 	log.Printf("Open Connections: %d\n", len(m.connections))	
 }
 
-func (m *ConnectionManager) OpenedConnectionListener() func() {
+func (m *ConnectionManager) ConnectionManagerThread() func() {
 	return func() {
-		log.Println("Opened Connection Listener Started")
-		defer log.Println("Opened Connection Listener Stopped")
+		log.Println("Connection Manager Started")
+		defer log.Println("Connection Manager Stopped")
 		for {
-			e := <-m.Opened
-			m.AddConnection(e.c)
-			e.ack <- true
-		}
-	}
-}
-
-func (m *ConnectionManager) ClosedConnectionListener() func() {
-	return func() {
-		log.Println("Closed Connection Listener Started")
-		defer log.Println("Closed Connection Listener Stopped")
-		for {
-			e := <-m.Closed
-			m.RemoveConnection(e.c)
-			e.ack <- true
+			select {
+			case e := <-m.Opened:
+				m.AddConnection(e.c)
+				e.ack <- true
+			case e := <-m.Closed:
+				m.RemoveConnection(e.c)
+				e.ack <- true
+			case <-m.Shutdown:
+				for _, c := range m.Connections() {
+					c.C.Close()
+				}
+				return
+			}
 		}
 	}
 }

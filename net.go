@@ -61,6 +61,7 @@ type Connection struct {
 type Server struct {
 	cm *ConnectionManager
 	World *World
+	Shutdown chan bool
 }
 
 func NewServer() Server {
@@ -69,13 +70,19 @@ func NewServer() Server {
 		connections: make([]*Connection,0),
 		Opened: make(chan ConnectionStateChange),
 		Closed: make(chan ConnectionStateChange),
+		Shutdown: make(chan bool),
 	}
-	go cm.OpenedConnectionListener()()
-	go cm.ClosedConnectionListener()()
-	w := NewWorld()
-	go w.NewPlayerListener()()
-	go w.NewRoomListener()()
-	return Server{ cm: cm, World: w }
+	go cm.ConnectionManagerThread()()
+	w, err := LoadWorld()
+	if err != nil {
+		log.Fatal(err)
+	}
+	go w.WorldThread()()
+	return Server{
+		cm: cm,
+		World: w,
+		Shutdown: make(chan bool),
+	}
 }
 
 func (s *Server) StartServer(addr string) {
@@ -86,12 +93,36 @@ func (s *Server) StartServer(addr string) {
 	}
 	defer l.Close()
 	for {
-		// Wait for a connection.
-		conn, err := l.Accept()
-		if err != nil {
-			log.Fatal(err)
+		select {
+		case <-s.Shutdown:
+			log.Printf("Shutting down server\n")
+			if s.World != nil {
+				ack := make(chan error)
+				s.World.SaveWorldState <- SaveWorldStateMessage{ Ack: ack }
+				<-ack
+				s.World.Shutdown <- true
+			}
+			if s.cm != nil {
+				s.cm.Shutdown <- true
+			}
+			return
+		default:
+			// Wait for a connection.
+			tcpL, ok := l.(*net.TCPListener)
+			if ok {
+				tcpL.SetDeadline(time.Now().Add(1e9))
+			}
+			conn, err := l.Accept()
+			if err != nil {
+				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					// Timed out waiting for a connection
+					continue
+				}
+				// This is a real error
+				log.Fatal(err)
+			}
+			go connectionWorker(s.NewConnection(conn))
 		}
-		go connectionWorker(s.NewConnection(conn))
 	}
 }
 
