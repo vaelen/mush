@@ -28,6 +28,8 @@ import (
 	"time"
 )
 
+const SaveStateFrequency time.Duration = time.Minute * 20
+
 type IdType uint64
 
 type Player struct {
@@ -91,7 +93,7 @@ func (w *World) WorldThread() func() {
 	return func() {
 		log.Println("World Thread Started")
 		defer log.Println("World Thread Stopped")
-		saveTimer := time.NewTicker(time.Minute * 1).C
+		saveTimer := time.NewTicker(SaveStateFrequency).C
 		for {
 			select {
 			case e := <-w.NewPlayer:
