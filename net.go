@@ -151,7 +151,7 @@ func (c *Connection) String() string {
 	r := c.C.RemoteAddr()
 	playerName := ""
 	if c.Player != nil {
-		playerName = c.Player.Name
+		playerName = c.Player.String()
 	}
 	s := fmt.Sprintf("[ %d : %s / %s (%s) ]", c.Id, r.Network(), r.String(), playerName)
 	return s
