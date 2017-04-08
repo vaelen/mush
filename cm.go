@@ -25,16 +25,16 @@ import (
 )
 
 type ConnectionManager struct {
-	connections []*Connection
-	connMutex sync.RWMutex
+	connections      []*Connection
+	connMutex        sync.RWMutex
 	nextConnectionId IdType
-	Opened chan ConnectionStateChange
-	Closed chan ConnectionStateChange
-	Shutdown chan bool
+	Opened           chan ConnectionStateChange
+	Closed           chan ConnectionStateChange
+	Shutdown         chan bool
 }
 
 type ConnectionStateChange struct {
-	c *Connection
+	c   *Connection
 	ack chan bool
 }
 
@@ -70,7 +70,7 @@ func (m *ConnectionManager) AddConnection(c *Connection) {
 	m.nextConnectionId++
 	c.Id = i
 	m.connections = append(m.connections, c)
-	log.Printf("Open Connections: %d\n", len(m.connections))	
+	log.Printf("Open Connections: %d\n", len(m.connections))
 }
 
 func (m *ConnectionManager) RemoveConnection(c *Connection) {
@@ -87,7 +87,7 @@ func (m *ConnectionManager) RemoveConnection(c *Connection) {
 	copy(m.connections[i:], m.connections[i+1:])
 	m.connections[len(m.connections)-1] = nil
 	m.connections = m.connections[:len(m.connections)-1]
-	log.Printf("Open Connections: %d\n", len(m.connections))	
+	log.Printf("Open Connections: %d\n", len(m.connections))
 }
 
 func (m *ConnectionManager) ConnectionManagerThread() func() {

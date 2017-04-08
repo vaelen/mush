@@ -25,8 +25,8 @@ import (
 )
 
 type TelnetInterceptor struct {
-	i io.Reader
-	o io.Writer
+	i     io.Reader
+	o     io.Writer
 	Debug bool
 }
 

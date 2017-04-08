@@ -22,8 +22,8 @@ package mush
 import (
 	"encoding/gob"
 	"fmt"
-	"os"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -33,10 +33,10 @@ const SaveStateFrequency time.Duration = time.Minute * 30
 type IdType uint64
 
 type Player struct {
-	Id IdType
-	Name string
+	Id       IdType
+	Name     string
 	Location Location
-	Admin bool
+	Admin    bool
 }
 
 func (p *Player) String() string {
@@ -47,12 +47,12 @@ func (p *Player) String() string {
 }
 
 type Room struct {
-	Id IdType
-	Name string
-	Desc string
+	Id    IdType
+	Name  string
+	Desc  string
 	Exits []Exit
 	Owner IdType
-	Attr map[string]string
+	Attr  map[string]string
 }
 
 func (r *Room) String() string {
@@ -69,16 +69,16 @@ func NewRoom() *Room {
 }
 
 type Exit struct {
-	Id IdType
-	Name string
-	Desc string
-	Dest Room
-	Owner IdType
-	Hidden bool
+	Id       IdType
+	Name     string
+	Desc     string
+	Dest     Room
+	Owner    IdType
+	Hidden   bool
 	Lockable bool
-	Locked bool
-	Key IdType
-	Attr map[string]string
+	Locked   bool
+	Key      IdType
+	Attr     map[string]string
 }
 
 func NewExit() *Exit {
@@ -88,12 +88,12 @@ func NewExit() *Exit {
 }
 
 type Item struct {
-	Id IdType
-	Name string
-	Desc string
-	Owner IdType
+	Id       IdType
+	Name     string
+	Desc     string
+	Owner    IdType
 	Location Location
-	Attr map[string]string
+	Attr     map[string]string
 }
 
 func (i *Item) String() string {
@@ -109,7 +109,6 @@ func NewItem() *Item {
 	}
 }
 
-
 type LocationType uint8
 
 const (
@@ -119,122 +118,122 @@ const (
 )
 
 type Location struct {
-	Id IdType
+	Id   IdType
 	Type LocationType
 }
 
 type World struct {
 	// Data
-	playerId IdType
-	roomId IdType
-	itemId IdType
+	playerId    IdType
+	roomId      IdType
+	itemId      IdType
 	DefaultRoom IdType
-	players map[IdType]*Player
-	rooms map[IdType]*Room
-	items map[IdType]*Item
+	players     map[IdType]*Player
+	rooms       map[IdType]*Room
+	items       map[IdType]*Item
 
 	// Channels
-	FindPlayer chan FindPlayerMessage
-	NewPlayer chan NewPlayerMessage
+	FindPlayer    chan FindPlayerMessage
+	NewPlayer     chan NewPlayerMessage
 	DestroyPlayer chan DestroyPlayerMessage
-	
-	FindRoom chan FindRoomMessage
-	NewRoom chan NewRoomMessage
+
+	FindRoom    chan FindRoomMessage
+	NewRoom     chan NewRoomMessage
 	DestroyRoom chan DestroyRoomMessage
-	
-	FindItem chan FindItemMessage
-	NewItem chan NewItemMessage
+
+	FindItem    chan FindItemMessage
+	NewItem     chan NewItemMessage
 	DestroyItem chan DestroyItemMessage
-	
+
 	SaveWorldState chan SaveWorldStateMessage
-	Shutdown chan bool
+	Shutdown       chan bool
 }
 
 func NewWorld() *World {
-	w := &World {
-		playerId: 1,
-		roomId: 1,
-		itemId: 1,
+	w := &World{
+		playerId:    1,
+		roomId:      1,
+		itemId:      1,
 		DefaultRoom: 1,
-		rooms: make(map[IdType]*Room),
-		players: make(map[IdType]*Player),
-		items: make(map[IdType]*Item),
+		rooms:       make(map[IdType]*Room),
+		players:     make(map[IdType]*Player),
+		items:       make(map[IdType]*Item),
 
-		FindPlayer: make(chan FindPlayerMessage),
-		NewPlayer: make(chan NewPlayerMessage),
+		FindPlayer:    make(chan FindPlayerMessage),
+		NewPlayer:     make(chan NewPlayerMessage),
 		DestroyPlayer: make(chan DestroyPlayerMessage),
 
-		FindRoom: make(chan FindRoomMessage),
-		NewRoom: make(chan NewRoomMessage),
+		FindRoom:    make(chan FindRoomMessage),
+		NewRoom:     make(chan NewRoomMessage),
 		DestroyRoom: make(chan DestroyRoomMessage),
 
 		SaveWorldState: make(chan SaveWorldStateMessage),
-		Shutdown: make(chan bool),
+		Shutdown:       make(chan bool),
 	}
-	
+
 	i := w.roomId
 	w.roomId++
-	r := &Room {
-		Id: i,
+	r := &Room{
+		Id:   i,
 		Name: "Main Lobby",
 		Desc: "This is the main lobby.",
 	}
 	w.rooms[r.Id] = r
 	w.DefaultRoom = r.Id
-		
+
 	return w
 }
 
 type FindPlayerMessage struct {
-	Id IdType
-	Name string
+	Id       IdType
+	Name     string
 	Location *Location
-	Ack chan []*Player
+	Ack      chan []*Player
 }
 
 type NewPlayerMessage struct {
-	Name string
+	Name  string
 	Owner IdType
-	Ack chan *Player
+	Ack   chan *Player
 }
 
 type DestroyPlayerMessage struct {
-	Id IdType
+	Id  IdType
 	Ack chan bool
 }
 
 type FindRoomMessage struct {
-	Id IdType
+	Id    IdType
 	Owner IdType
-	Ack chan []*Room
+	Ack   chan []*Room
 }
 
 type NewRoomMessage struct {
-	Name string
+	Name  string
 	Owner IdType
-	Ack chan *Room
+	Ack   chan *Room
 }
 
 type DestroyRoomMessage struct {
-	Id IdType
+	Id  IdType
 	Ack chan bool
 }
 
 type FindItemMessage struct {
-	Id IdType
-	Owner IdType
+	Id       IdType
+	Owner    IdType
 	Location *Location
-	Ack chan []*Item
+	Ack      chan []*Item
 }
 
 type NewItemMessage struct {
-	Name string
+	Name  string
 	Owner IdType
-	Ack chan *Item
+	Ack   chan *Item
 }
 
 type DestroyItemMessage struct {
-	Id IdType
+	Id  IdType
 	Ack chan bool
 }
 
@@ -249,7 +248,7 @@ func (w *World) WorldThread() func() {
 		saveTimer := time.NewTicker(SaveStateFrequency).C
 		for {
 			select {
-			case e:= <-w.FindPlayer:
+			case e := <-w.FindPlayer:
 				r := make([]*Player, 0)
 				if e.Id > 0 {
 					p := w.players[e.Id]
@@ -270,10 +269,10 @@ func (w *World) WorldThread() func() {
 				id := w.playerId
 				w.playerId++
 				p := &Player{
-					Id: id,
+					Id:   id,
 					Name: e.Name,
-					Location: Location {
-						Id: w.DefaultRoom,
+					Location: Location{
+						Id:   w.DefaultRoom,
 						Type: L_ROOM,
 					},
 				}
@@ -282,13 +281,13 @@ func (w *World) WorldThread() func() {
 				}
 				w.players[p.Id] = p
 				e.Ack <- p
-			case e:= <-w.DestroyPlayer:
+			case e := <-w.DestroyPlayer:
 				if e.Id == 1 {
 					return
 				}
 				log.Printf("Destroy Player: %s\n", e.Id)
 				delete(w.players, e.Id)
-			case e:= <-w.FindRoom:
+			case e := <-w.FindRoom:
 				r := make([]*Room, 0)
 				if e.Id > 0 {
 					v := w.rooms[e.Id]
@@ -304,19 +303,19 @@ func (w *World) WorldThread() func() {
 				id := w.roomId
 				w.roomId++
 				r := &Room{
-					Id: id,
-					Name: e.Name,
+					Id:    id,
+					Name:  e.Name,
 					Owner: e.Owner,
 				}
 				w.rooms[r.Id] = r
 				e.Ack <- r
-			case e:= <-w.DestroyRoom:
+			case e := <-w.DestroyRoom:
 				if e.Id == 1 {
 					return
 				}
 				log.Printf("Destroy Room: %s\n", e.Id)
 				delete(w.rooms, e.Id)
-			case e:= <-w.FindItem:
+			case e := <-w.FindItem:
 				r := make([]*Item, 0)
 				if e.Id > 0 {
 					i := w.items[e.Id]
@@ -334,23 +333,23 @@ func (w *World) WorldThread() func() {
 				id := w.itemId
 				w.itemId++
 				i := &Item{
-					Id: id,
-					Name: e.Name,
+					Id:    id,
+					Name:  e.Name,
 					Owner: e.Owner,
-					Location: Location {
-						Id: e.Owner,
+					Location: Location{
+						Id:   e.Owner,
 						Type: L_PLAYER,
 					},
 				}
 				w.items[i.Id] = i
 				e.Ack <- i
-			case e:= <-w.DestroyPlayer:
+			case e := <-w.DestroyPlayer:
 				if e.Id == 1 {
 					return
 				}
 				log.Printf("Destroy Player: %s\n", e.Id)
 				delete(w.players, e.Id)
-			case e:= <-w.SaveWorldState:
+			case e := <-w.SaveWorldState:
 				e.Ack <- w.saveState()
 			case <-saveTimer:
 				w.saveState()
@@ -375,7 +374,7 @@ func (w *World) findPlayerByName(name string) *Player {
 func (w *World) findPlayerByLocation(loc Location) []*Player {
 	r := make([]*Player, 0)
 	for _, p := range w.players {
-		if p.Location == loc  {
+		if p.Location == loc {
 			r = append(r, p)
 		}
 	}
@@ -385,7 +384,7 @@ func (w *World) findPlayerByLocation(loc Location) []*Player {
 func (w *World) findRoomByOwner(id IdType) []*Room {
 	r := make([]*Room, 0)
 	for _, v := range w.rooms {
-		if v.Owner == id  {
+		if v.Owner == id {
 			r = append(r, v)
 		}
 	}
@@ -395,7 +394,7 @@ func (w *World) findRoomByOwner(id IdType) []*Room {
 func (w *World) findItemByLocation(loc Location) []*Item {
 	r := make([]*Item, 0)
 	for _, i := range w.items {
-		if i.Location == loc  {
+		if i.Location == loc {
 			r = append(r, i)
 		}
 	}
@@ -405,7 +404,7 @@ func (w *World) findItemByLocation(loc Location) []*Item {
 func (w *World) findItemByOwner(id IdType) []*Item {
 	r := make([]*Item, 0)
 	for _, i := range w.items {
-		if i.Owner == id  {
+		if i.Owner == id {
 			r = append(r, i)
 		}
 	}
@@ -456,4 +455,3 @@ func LoadWorld() (*World, error) {
 	}
 	return w, nil
 }
-

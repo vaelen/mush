@@ -23,16 +23,16 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/abiosoft/ishell"
+	"gopkg.in/readline.v1"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"time"
-	"github.com/abiosoft/ishell"
-	"gopkg.in/readline.v1"
 )
 
-const VersionName  = "Vaelen/MUSH Server"
+const VersionName = "Vaelen/MUSH Server"
 const VersionMajor = 0
 const VersionMinor = 0
 const VersionPatch = 1
@@ -49,29 +49,29 @@ func VersionString() string {
 const AuthenticationEnabled = false
 
 type Connection struct {
-	Id IdType
-	C net.Conn
-	Player *Player
-	Shell *ishell.Shell
-	Server *Server
+	Id            IdType
+	C             net.Conn
+	Player        *Player
+	Shell         *ishell.Shell
+	Server        *Server
 	Authenticated bool
-	Connected time.Time
-	LastActed time.Time
+	Connected     time.Time
+	LastActed     time.Time
 }
 
 type Server struct {
-	cm *ConnectionManager
-	World *World
+	cm       *ConnectionManager
+	World    *World
 	Shutdown chan bool
 }
 
 func NewServer() Server {
-	cm := &ConnectionManager {
+	cm := &ConnectionManager{
 		nextConnectionId: 1,
-		connections: make([]*Connection,0),
-		Opened: make(chan ConnectionStateChange),
-		Closed: make(chan ConnectionStateChange),
-		Shutdown: make(chan bool),
+		connections:      make([]*Connection, 0),
+		Opened:           make(chan ConnectionStateChange),
+		Closed:           make(chan ConnectionStateChange),
+		Shutdown:         make(chan bool),
 	}
 	go cm.ConnectionManagerThread()()
 	w, err := LoadWorld()
@@ -80,8 +80,8 @@ func NewServer() Server {
 	}
 	go w.WorldThread()()
 	return Server{
-		cm: cm,
-		World: w,
+		cm:       cm,
+		World:    w,
 		Shutdown: make(chan bool),
 	}
 }
@@ -99,7 +99,7 @@ func (s *Server) StartServer(addr string) {
 			log.Printf("Shutting down server\n")
 			if s.World != nil {
 				ack := make(chan error)
-				s.World.SaveWorldState <- SaveWorldStateMessage{ Ack: ack }
+				s.World.SaveWorldState <- SaveWorldStateMessage{Ack: ack}
 				<-ack
 				s.World.Shutdown <- true
 			}
@@ -128,12 +128,12 @@ func (s *Server) StartServer(addr string) {
 }
 
 func (s *Server) NewConnection(conn net.Conn) *Connection {
-	c := &Connection {
+	c := &Connection{
 		C: conn,
-		Player: &Player {
+		Player: &Player{
 			Name: "[UNKNOWN]",
 		},
-		Server: s,
+		Server:    s,
 		Connected: time.Now(),
 		LastActed: time.Now(),
 	}
@@ -210,13 +210,13 @@ func connectionWorker(c *Connection) {
 
 func createShell(c *Connection) {
 	c.Shell = ishell.NewWithConfig(&readline.Config{
-		Prompt: "> ",
-		Stdin: TelnetInterceptor{i: c.C, o: c.C},
-		Stdout: c.C,
-		Stderr: c.C,
+		Prompt:              "> ",
+		Stdin:               TelnetInterceptor{i: c.C, o: c.C},
+		Stdout:              c.C,
+		Stderr:              c.C,
 		ForceUseInteractive: true,
-		UniqueEditLine: true,
-		FuncIsTerminal: func() bool { return true },
+		UniqueEditLine:      true,
+		FuncIsTerminal:      func() bool { return true },
 		FuncMakeRaw: func() error {
 			return nil
 		},
@@ -228,7 +228,6 @@ func createShell(c *Connection) {
 		},
 	})
 }
-
 
 func (s *Server) Wall(format string, a ...interface{}) {
 	for _, c := range s.Connections() {
@@ -264,10 +263,10 @@ func Login(c *Connection) (bool, error) {
 	buf := make([]byte, 0, 4096)
 
 	fmt.Fprintf(w, "Connected to %s\n\n", VersionString())
-	
+
 	fmt.Fprintf(w, "Username => ")
 	w.Flush()
-	
+
 	n, err := r.ReadString('\n')
 	if err != nil {
 		return false, err
@@ -285,9 +284,9 @@ func Login(c *Connection) (bool, error) {
 		log.Println("New Player")
 		// New Player
 		ack := make(chan *Player)
-		c.Server.World.NewPlayer <- NewPlayerMessage {
+		c.Server.World.NewPlayer <- NewPlayerMessage{
 			Name: playerName,
-			Ack: ack,
+			Ack:  ack,
 		}
 		p = <-ack
 	} else {
@@ -298,7 +297,7 @@ func Login(c *Connection) (bool, error) {
 			w.Flush()
 			// Read any pending bytes
 			r.Read(buf)
-			
+
 			p, err := r.ReadString('\n')
 			if err != nil {
 				c.Log("ERROR: %s", err.Error())
@@ -307,7 +306,7 @@ func Login(c *Connection) (bool, error) {
 			p = strings.TrimSpace(p)
 			c.Log("Password: %s", p)
 			// TODO: Authenticate
-			
+
 			EnableEcho(w)
 			w.Flush()
 			// Read any pending bytes
@@ -349,7 +348,7 @@ func (c *Connection) LocationName(loc Location) string {
 
 func (c *Connection) FindPlayerById(id IdType) *Player {
 	ack := make(chan []*Player)
-	c.Server.World.FindPlayer <- FindPlayerMessage { Id: id, Ack: ack }
+	c.Server.World.FindPlayer <- FindPlayerMessage{Id: id, Ack: ack}
 	players := <-ack
 	if len(players) == 0 {
 		return nil
@@ -360,7 +359,7 @@ func (c *Connection) FindPlayerById(id IdType) *Player {
 
 func (c *Connection) FindPlayerByName(name string) *Player {
 	ack := make(chan []*Player)
-	c.Server.World.FindPlayer <- FindPlayerMessage { Name: name, Ack: ack }
+	c.Server.World.FindPlayer <- FindPlayerMessage{Name: name, Ack: ack}
 	players := <-ack
 	if len(players) == 0 {
 		return nil
@@ -371,7 +370,7 @@ func (c *Connection) FindPlayerByName(name string) *Player {
 
 func (c *Connection) FindRoomById(id IdType) *Room {
 	ack := make(chan []*Room)
-	c.Server.World.FindRoom <- FindRoomMessage { Id: id, Ack: ack }
+	c.Server.World.FindRoom <- FindRoomMessage{Id: id, Ack: ack}
 	rooms := <-ack
 	if len(rooms) == 0 {
 		return nil
@@ -382,7 +381,7 @@ func (c *Connection) FindRoomById(id IdType) *Room {
 
 func (c *Connection) FindItemById(id IdType) *Item {
 	ack := make(chan []*Item)
-	c.Server.World.FindItem <- FindItemMessage { Id: id, Ack: ack }
+	c.Server.World.FindItem <- FindItemMessage{Id: id, Ack: ack}
 	items := <-ack
 	if len(items) == 0 {
 		return nil
@@ -390,4 +389,3 @@ func (c *Connection) FindItemById(id IdType) *Item {
 		return items[0]
 	}
 }
-

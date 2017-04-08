@@ -21,29 +21,29 @@ package mush
 
 import (
 	"fmt"
+	"github.com/abiosoft/ishell"
 	"strings"
 	"time"
-	"github.com/abiosoft/ishell"
 )
 
 func addCommands(c *Connection) {
 	shell := c.Shell
 	player := c.Player
-	
-	shell.AddCmd(&ishell.Cmd{
-        Name: "exit",
-        Help: "log off",
-        Func: func(e *ishell.Context) {
-            e.Printf("Goodbye, %s\n", player.Name)
-			e.Stop()
-        },
-    })
 
 	shell.AddCmd(&ishell.Cmd{
-        Name: "say",
-        Help: "say something to the everybody else. say [player] <message>",
+		Name: "exit",
+		Help: "log off",
+		Func: func(e *ishell.Context) {
+			e.Printf("Goodbye, %s\n", player.Name)
+			e.Stop()
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name:     "say",
+		Help:     "say something to the everybody else. say [player] <message>",
 		LongHelp: "say [name] \"message\"",
-        Func: func(e *ishell.Context) {
+		Func: func(e *ishell.Context) {
 			if len(e.Args) > 0 {
 				var target string
 				var phrase string
@@ -59,14 +59,14 @@ func addCommands(c *Connection) {
 			} else {
 				c.Printf(e.Cmd.HelpText())
 			}
-        },
-    })
-	
+		},
+	})
+
 	shell.AddCmd(&ishell.Cmd{
-        Name: "whisper",
-        Help: "whisper something to the somebody else. whisper <player> <message>",
+		Name:     "whisper",
+		Help:     "whisper something to the somebody else. whisper <player> <message>",
 		LongHelp: "whisper name \"message\"",
-        Func: func(e *ishell.Context) {
+		Func: func(e *ishell.Context) {
 			if len(e.Args) > 1 {
 				c.updateIdleTime()
 				target := e.Args[0]
@@ -76,14 +76,14 @@ func addCommands(c *Connection) {
 			} else {
 				c.Printf(e.Cmd.HelpText())
 			}
-        },
-    })
+		},
+	})
 
 	shell.AddCmd(&ishell.Cmd{
-        Name: "emote",
-        Help: "emote something. emote <action>",
+		Name:     "emote",
+		Help:     "emote something. emote <action>",
 		LongHelp: "emote \"action\"",
-        Func: func(e *ishell.Context) {
+		Func: func(e *ishell.Context) {
 			if len(e.Args) > 0 {
 				c.updateIdleTime()
 				action := e.Args[0]
@@ -92,31 +92,31 @@ func addCommands(c *Connection) {
 			} else {
 				c.Printf(e.Cmd.HelpText())
 			}
-        },
-    })
-	
+		},
+	})
+
 	shell.AddCmd(&ishell.Cmd{
-        Name: "look",
-        Help: "look around",
-        Func: func(e *ishell.Context) {
+		Name: "look",
+		Help: "look around",
+		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			c.Look()
-        },
-    })
+		},
+	})
 
 	shell.AddCmd(&ishell.Cmd{
-        Name: "who",
-        Help: "see who's online",
-        Func: func(e *ishell.Context) {
+		Name: "who",
+		Help: "see who's online",
+		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			c.Who()
-        },
-    })
+		},
+	})
 
 	shell.AddCmd(&ishell.Cmd{
-        Name: "save",
-        Help: "save world state (admin)",
-        Func: func(e *ishell.Context) {
+		Name: "save",
+		Help: "save world state (admin)",
+		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if c.IsAdmin() {
 				c.Printf("Saving world state...")
@@ -131,13 +131,13 @@ func addCommands(c *Connection) {
 			} else {
 				c.Printf("Not Authorized\n")
 			}
-        },
-    })
+		},
+	})
 
 	shell.AddCmd(&ishell.Cmd{
-        Name: "shutdown",
-        Help: "shutdown server (admin)",
-        Func: func(e *ishell.Context) {
+		Name: "shutdown",
+		Help: "shutdown server (admin)",
+		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if c.IsAdmin() {
 				c.Printf("Shutting down the server...\n")
@@ -145,8 +145,8 @@ func addCommands(c *Connection) {
 			} else {
 				c.Printf("Not Authorized\n")
 			}
-        },
-    })
+		},
+	})
 
 }
 
@@ -175,7 +175,7 @@ func (c *Connection) findPlayerConnectionByName(target string) (targetId IdType,
 
 func (c *Connection) Say(target string, phrase string) {
 	targetId, targetName := c.findPlayerConnectionByName(target)
-	
+
 	if target != "" {
 		if targetName == "" {
 			c.Printf("Couldn't find player %s\n", target)
@@ -191,7 +191,7 @@ func (c *Connection) Say(target string, phrase string) {
 		case conn.Id == c.Id:
 			// Do Nothing
 		case conn.Id == targetId && target != "":
-			conn.Printf("%s says \"%s\" to you.\n", c.Player.Name, phrase)			
+			conn.Printf("%s says \"%s\" to you.\n", c.Player.Name, phrase)
 		case target == "":
 			conn.Printf("%s says \"%s\".\n", c.Player.Name, phrase)
 		default:
@@ -221,7 +221,7 @@ func (c *Connection) Whisper(target string, phrase string) {
 		case conn.Id == c.Id:
 			// Do Nothing
 		case conn.Id == targetId:
-			conn.Printf("%s whispers \"%s\".\n", c.Player.Name, phrase)			
+			conn.Printf("%s whispers \"%s\".\n", c.Player.Name, phrase)
 		default:
 			conn.Printf("%s whispers to %s.\n", c.Player.Name, targetName)
 		}
@@ -266,7 +266,7 @@ func lookRoom(c *Connection, r *Room) string {
 		return ""
 	}
 	p := c.Player
-	playersHere := make([]string,0)
+	playersHere := make([]string, 0)
 	for _, conn := range c.Server.Connections() {
 		p2 := conn.Player
 		if conn.Authenticated && p2 != nil && p2.Id != p.Id {
@@ -305,7 +305,7 @@ func (c *Connection) Who() {
 		connId := fmt.Sprintf("%10d", conn.Id)
 		connected := conn.Connected.Format(time.RFC1123)
 		idle := time.Since(conn.LastActed).String()
-		
+
 		s += fmt.Sprintf(f, connId, playerName, locName, connected, idle)
 
 	}
