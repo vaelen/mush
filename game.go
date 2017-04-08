@@ -21,9 +21,11 @@ package mush
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,6 +33,14 @@ import (
 const SaveStateFrequency time.Duration = time.Minute * 30
 
 type IdType uint64
+
+func ParseId(s string) (IdType, error) {
+	i, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, errors.New("Couldn't parse id: " + s)
+	}
+	return IdType(i), nil
+}
 
 type Player struct {
 	Id       IdType
@@ -167,6 +177,10 @@ func NewWorld() *World {
 		NewRoom:     make(chan NewRoomMessage),
 		DestroyRoom: make(chan DestroyRoomMessage),
 
+		FindItem:    make(chan FindItemMessage),
+		NewItem:     make(chan NewItemMessage),
+		DestroyItem: make(chan DestroyItemMessage),
+
 		SaveWorldState: make(chan SaveWorldStateMessage),
 		Shutdown:       make(chan bool),
 	}
@@ -174,9 +188,10 @@ func NewWorld() *World {
 	i := w.roomId
 	w.roomId++
 	r := &Room{
-		Id:   i,
-		Name: "Main Lobby",
-		Desc: "This is the main lobby.",
+		Id:    i,
+		Name:  "Main Lobby",
+		Desc:  "This is the main lobby.",
+		Owner: 1,
 	}
 	w.rooms[r.Id] = r
 	w.DefaultRoom = r.Id
@@ -283,10 +298,11 @@ func (w *World) WorldThread() func() {
 				e.Ack <- p
 			case e := <-w.DestroyPlayer:
 				if e.Id == 1 {
-					return
+					e.Ack <- false
 				}
-				log.Printf("Destroy Player: %s\n", e.Id)
+				log.Printf("Destroy Player: %d\n", e.Id)
 				delete(w.players, e.Id)
+				e.Ack <- true
 			case e := <-w.FindRoom:
 				r := make([]*Room, 0)
 				if e.Id > 0 {
@@ -311,10 +327,11 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.DestroyRoom:
 				if e.Id == 1 {
-					return
+					e.Ack <- false
 				}
-				log.Printf("Destroy Room: %s\n", e.Id)
+				log.Printf("Destroy Room: %d\n", e.Id)
 				delete(w.rooms, e.Id)
+				e.Ack <- true
 			case e := <-w.FindItem:
 				r := make([]*Item, 0)
 				if e.Id > 0 {
@@ -343,12 +360,10 @@ func (w *World) WorldThread() func() {
 				}
 				w.items[i.Id] = i
 				e.Ack <- i
-			case e := <-w.DestroyPlayer:
-				if e.Id == 1 {
-					return
-				}
-				log.Printf("Destroy Player: %s\n", e.Id)
-				delete(w.players, e.Id)
+			case e := <-w.DestroyItem:
+				log.Printf("Destroy Item: %d\n", e.Id)
+				delete(w.items, e.Id)
+				e.Ack <- true
 			case e := <-w.SaveWorldState:
 				e.Ack <- w.saveState()
 			case <-saveTimer:

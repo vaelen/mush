@@ -167,6 +167,12 @@ func (c *Connection) Printf(format string, a ...interface{}) {
 	}
 }
 
+func (c *Connection) Println(a ...interface{}) {
+	if c.Shell != nil {
+		c.Shell.Println(a...)
+	}
+}
+
 func (c *Connection) ReadLine() string {
 	if c.Shell != nil {
 		return c.Shell.ReadLine()
@@ -368,6 +374,15 @@ func (c *Connection) FindPlayerByName(name string) *Player {
 	}
 }
 
+func (c *Connection) NewRoom(name string) *Room {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return nil
+	}
+	ack := make(chan *Room)
+	c.Server.World.NewRoom <- NewRoomMessage{Name: name, Owner: c.Player.Id, Ack: ack}
+	return <-ack
+}
+
 func (c *Connection) FindRoomById(id IdType) *Room {
 	ack := make(chan []*Room)
 	c.Server.World.FindRoom <- FindRoomMessage{Id: id, Ack: ack}
@@ -379,6 +394,38 @@ func (c *Connection) FindRoomById(id IdType) *Room {
 	}
 }
 
+func (c *Connection) FindRoomsByOwner(id IdType) []*Room {
+	ack := make(chan []*Room)
+	c.Server.World.FindRoom <- FindRoomMessage{Owner: id, Ack: ack}
+	return <-ack
+}
+
+func (c *Connection) DestroyRoom(id IdType) *Room {
+	if c == nil || !c.Authenticated || c.Player == nil || id < 2 {
+		return nil
+	}
+	r := c.FindRoomById(id)
+	if r == nil || (r.Owner != c.Player.Id && !c.Player.Admin) {
+		// Can't Destroy
+		return nil
+	}
+
+	ack := make(chan bool)
+	c.Server.World.DestroyRoom <- DestroyRoomMessage{Id: id, Ack: ack}
+	<-ack
+
+	return r
+}
+
+func (c *Connection) NewItem(name string) *Item {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return nil
+	}
+	ack := make(chan *Item)
+	c.Server.World.NewItem <- NewItemMessage{Name: name, Owner: c.Player.Id, Ack: ack}
+	return <-ack
+}
+
 func (c *Connection) FindItemById(id IdType) *Item {
 	ack := make(chan []*Item)
 	c.Server.World.FindItem <- FindItemMessage{Id: id, Ack: ack}
@@ -388,4 +435,27 @@ func (c *Connection) FindItemById(id IdType) *Item {
 	} else {
 		return items[0]
 	}
+}
+
+func (c *Connection) FindItemsByOwner(id IdType) []*Item {
+	ack := make(chan []*Item)
+	c.Server.World.FindItem <- FindItemMessage{Owner: id, Ack: ack}
+	return <-ack
+}
+
+func (c *Connection) DestroyItem(id IdType) *Item {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return nil
+	}
+	i := c.FindItemById(id)
+	if i == nil || (i.Owner != c.Player.Id && !c.Player.Admin) {
+		// Can't Destroy
+		return nil
+	}
+
+	ack := make(chan bool)
+	c.Server.World.DestroyItem <- DestroyItemMessage{Id: id, Ack: ack}
+	<-ack
+
+	return i
 }

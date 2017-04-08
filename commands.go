@@ -32,7 +32,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "exit",
-		Help: "log off",
+		Help: "Log off",
 		Func: func(e *ishell.Context) {
 			e.Printf("Goodbye, %s\n", player.Name)
 			e.Stop()
@@ -40,9 +40,8 @@ func addCommands(c *Connection) {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name:     "say",
-		Help:     "say something to the everybody else. say [player] <message>",
-		LongHelp: "say [name] \"message\"",
+		Name: "say",
+		Help: "Say something to the everybody else. Usage: say [player] <message>",
 		Func: func(e *ishell.Context) {
 			if len(e.Args) > 0 {
 				var target string
@@ -57,15 +56,14 @@ func addCommands(c *Connection) {
 				c.Log("Executing Say: %s - %s", target, phrase)
 				c.Say(target, phrase)
 			} else {
-				c.Printf(e.Cmd.HelpText())
+				c.Println(e.Cmd.HelpText())
 			}
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name:     "whisper",
-		Help:     "whisper something to the somebody else. whisper <player> <message>",
-		LongHelp: "whisper name \"message\"",
+		Name: "whisper",
+		Help: "Whisper something to the somebody else. Usage: whisper <player> <message>",
 		Func: func(e *ishell.Context) {
 			if len(e.Args) > 1 {
 				c.updateIdleTime()
@@ -74,15 +72,14 @@ func addCommands(c *Connection) {
 				c.Log("Executing Whisper: %s - %s", target, phrase)
 				c.Whisper(target, phrase)
 			} else {
-				c.Printf(e.Cmd.HelpText())
+				c.Println(e.Cmd.HelpText())
 			}
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name:     "emote",
-		Help:     "emote something. emote <action>",
-		LongHelp: "emote \"action\"",
+		Name: "emote",
+		Help: "Do something. Usage: emote <action>",
 		Func: func(e *ishell.Context) {
 			if len(e.Args) > 0 {
 				c.updateIdleTime()
@@ -90,14 +87,14 @@ func addCommands(c *Connection) {
 				c.Log("Executing Emote: %s", action)
 				c.Emote(action)
 			} else {
-				c.Printf(e.Cmd.HelpText())
+				c.Println(e.Cmd.HelpText())
 			}
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "look",
-		Help: "look around",
+		Help: "Look around",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			c.Look()
@@ -106,7 +103,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "who",
-		Help: "see who's online",
+		Help: "See who's online",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			c.Who()
@@ -115,7 +112,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "save",
-		Help: "save world state (admin)",
+		Help: "Save world state (admin)",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if c.IsAdmin() {
@@ -136,7 +133,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "shutdown",
-		Help: "shutdown server (admin)",
+		Help: "Shutdown server (admin)",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if c.IsAdmin() {
@@ -147,6 +144,99 @@ func addCommands(c *Connection) {
 			}
 		},
 	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "create",
+		Help: "Creates a new room or item. Usage: create <room|item> <name>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 1 {
+				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
+				n := e.Args[1]
+				if t == "room" {
+					r := c.NewRoom(n)
+					if r == nil {
+						c.Println("Couldn't Create Room")
+					} else {
+						c.Printf("New Room Created: %s\n", r.String())
+					}
+				} else if t == "item" {
+					i := c.NewItem(n)
+					if i == nil {
+						c.Println("Couldn't Create Item")
+					} else {
+						c.Printf("New Item Created: %s\n", i.String())
+					}
+				} else {
+					c.Println(e.Cmd.HelpText())
+				}
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "destroy",
+		Help: "Destroys a room or item. Usage: destroy <room|item> <id>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 1 {
+				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
+				id, err := ParseId(e.Args[1])
+				if err != nil {
+					c.Printf("Couldn't parse id: %s\n", e.Args[1])
+					return
+				}
+				if t == "room" {
+					r := c.DestroyRoom(id)
+					if r == nil {
+						c.Println("Couldn't Destroy Room")
+					} else {
+						c.Printf("Room Destroyed: %s\n", r.String())
+					}
+				} else if t == "item" {
+					i := c.DestroyItem(id)
+					if i == nil {
+						c.Println("Couldn't Destroy Item")
+					} else {
+						c.Printf("Item Destroyed: %s\n", i.String())
+					}
+				} else {
+					c.Println(e.Cmd.HelpText())
+				}
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "list",
+		Help: "List your rooms or items. Usage: list <rooms|items>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if c.Player == nil {
+				return
+			}
+			if len(e.Args) > 0 {
+				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
+				if t == "rooms" {
+					rooms := c.FindRoomsByOwner(c.Player.Id)
+					c.ListRooms(rooms)
+				} else if t == "items" {
+					items := c.FindItemsByOwner(c.Player.Id)
+					c.ListItems(items)
+				} else {
+					c.Println(e.Cmd.HelpText())
+				}
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
+	// TODO: Add take/drop
 
 }
 
@@ -284,15 +374,18 @@ func lookRoom(c *Connection, r *Room) string {
 	return s
 }
 
+const (
+	h10 = "----------"
+	h15 = "---------------"
+	h20 = "--------------------"
+	h30 = "------------------------------"
+)
+
 // TODO: Have the column widths auto-adjust to fit the data
 func (c *Connection) Who() {
 	s := "Players Currently Online:\n"
 	f := "%10s %20s %20s %30s %15s\n"
 	s += fmt.Sprintf(f, "Connection", "Player", "Location", "Connected", "Idle")
-	h10 := "----------"
-	h15 := "---------------"
-	h20 := "--------------------"
-	h30 := "------------------------------"
 	s += fmt.Sprintf(f, h10, h20, h20, h30, h15)
 	for _, conn := range c.Server.Connections() {
 		playerName := "[Authenticating]"
@@ -311,4 +404,22 @@ func (c *Connection) Who() {
 	}
 	s += "\n"
 	c.Printf(s)
+}
+
+func (c *Connection) ListRooms(rooms []*Room) {
+	s := fmt.Sprintf("%10s %30s\n", "Id", "Room Name")
+	s += fmt.Sprintf("%10s %30s\n", h10, h30)
+	for _, r := range rooms {
+		s += fmt.Sprintf("%10d %30s\n", r.Id, r.Name)
+	}
+	c.Println(s)
+}
+
+func (c *Connection) ListItems(items []*Item) {
+	s := fmt.Sprintf("%10s %30s %30s\n", "Id", "Item Name", "Location")
+	s += fmt.Sprintf("%10s %30s %30s\n", h10, h30, h30)
+	for _, i := range items {
+		s += fmt.Sprintf("%10d %30s %30s\n", i.Id, i.Name, c.LocationName(i.Location))
+	}
+	c.Println(s)
 }
