@@ -21,6 +21,7 @@ package mush
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -148,7 +149,11 @@ func (s *Server) Connections() []*Connection {
 
 func (c *Connection) String() string {
 	r := c.C.RemoteAddr()
-	s := fmt.Sprintf("[ %d : %s / %s (%s) ]", c.Id, r.Network(), r.String(), c.Player.Name)
+	playerName := ""
+	if c.Player != nil {
+		playerName = c.Player.Name
+	}
+	s := fmt.Sprintf("[ %d : %s / %s (%s) ]", c.Id, r.Network(), r.String(), playerName)
 	return s
 }
 
@@ -269,9 +274,15 @@ func Login(c *Connection) (bool, error) {
 	}
 	playerName := strings.TrimSpace(n)
 
-	p := c.Server.World.FindPlayerByName(playerName)
-	isNew := p == nil
+	ack := make(chan []*Player)
+	c.Server.World.FindPlayer <- FindPlayerMessage{Name: playerName, Ack: ack}
+	players := <-ack
+	log.Println(players)
+	isNew := (len(players) == 0)
+	log.Println(len(players))
+	var p *Player
 	if isNew {
+		log.Println("New Player")
 		// New Player
 		ack := make(chan *Player)
 		c.Server.World.NewPlayer <- NewPlayerMessage {
@@ -280,6 +291,7 @@ func Login(c *Connection) (bool, error) {
 		}
 		p = <-ack
 	} else {
+		p = players[0]
 		if AuthenticationEnabled {
 			fmt.Fprintf(w, "Password => ")
 			DisableEcho(w)
@@ -302,8 +314,80 @@ func Login(c *Connection) (bool, error) {
 			r.Read(buf)
 		}
 	}
+	if p == nil {
+		return false, errors.New("Player Not Found")
+	}
 	c.Player = p
 	c.Authenticated = true
 	c.Log("Logged In Successfully")
 	return isNew, nil
 }
+
+// Helper Methods
+
+func (c *Connection) LocationName(loc Location) string {
+	locName := "[UNKNOWN]"
+	switch loc.Type {
+	case L_ROOM:
+		r := c.FindRoomById(loc.Id)
+		if r != nil {
+			locName = r.String()
+		}
+	case L_PLAYER:
+		p := c.FindPlayerById(loc.Id)
+		if p != nil {
+			locName = p.String()
+		}
+	case L_ITEM:
+		i := c.FindItemById(loc.Id)
+		if i != nil {
+			locName = i.String()
+		}
+	}
+	return locName
+}
+
+func (c *Connection) FindPlayerById(id IdType) *Player {
+	ack := make(chan []*Player)
+	c.Server.World.FindPlayer <- FindPlayerMessage { Id: id, Ack: ack }
+	players := <-ack
+	if len(players) == 0 {
+		return nil
+	} else {
+		return players[0]
+	}
+}
+
+func (c *Connection) FindPlayerByName(name string) *Player {
+	ack := make(chan []*Player)
+	c.Server.World.FindPlayer <- FindPlayerMessage { Name: name, Ack: ack }
+	players := <-ack
+	if len(players) == 0 {
+		return nil
+	} else {
+		return players[0]
+	}
+}
+
+func (c *Connection) FindRoomById(id IdType) *Room {
+	ack := make(chan []*Room)
+	c.Server.World.FindRoom <- FindRoomMessage { Id: id, Ack: ack }
+	rooms := <-ack
+	if len(rooms) == 0 {
+		return nil
+	} else {
+		return rooms[0]
+	}
+}
+
+func (c *Connection) FindItemById(id IdType) *Item {
+	ack := make(chan []*Item)
+	c.Server.World.FindItem <- FindItemMessage { Id: id, Ack: ack }
+	items := <-ack
+	if len(items) == 0 {
+		return nil
+	} else {
+		return items[0]
+	}
+}
+

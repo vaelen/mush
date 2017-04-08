@@ -241,23 +241,47 @@ func (c *Connection) Emote(action string) {
 }
 
 func (c *Connection) Look() {
-	cId := c.Id
-	r := c.Player.Room
-	rId := r.Id
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+	loc := c.Player.Location
+	s := ""
+	switch loc.Type {
+	case L_ROOM:
+		r := c.FindRoomById(loc.Id)
+		if r == nil {
+			s = "You are lost.\n"
+		} else {
+			s = lookRoom(c, r)
+		}
+	default:
+		// Not Yet Supported
+		s = "You don't know where you are.\n"
+	}
+	c.Printf(s)
+}
+
+func lookRoom(c *Connection, r *Room) string {
+	if c == nil || c.Player == nil || r == nil {
+		return ""
+	}
+	p := c.Player
 	playersHere := make([]string,0)
 	for _, conn := range c.Server.Connections() {
-		p := conn.Player
-		if conn.Authenticated && p != nil && p.Room != nil && cId != conn.Id && rId == p.Room.Id {
-			playersHere = append(playersHere, p.Name)
+		p2 := conn.Player
+		if conn.Authenticated && p2 != nil && p2.Id != p.Id {
+			if p2.Location.Type == L_ROOM && p2.Location.Id == r.Id {
+				playersHere = append(playersHere, p.Name)
+			}
 		}
 	}
-	s := fmt.Sprintf("[%s (%d)]\n", r.Name, r.Id)
+	s := r.String() + "\n"
 	s += r.Desc + "\n"
 	for _, pName := range playersHere {
 		s += fmt.Sprintf("You see %s here.\n", pName)
 	}
 	s += "\n"
-	c.Printf(s)
+	return s
 }
 
 // TODO: Have the column widths auto-adjust to fit the data
@@ -272,23 +296,17 @@ func (c *Connection) Who() {
 	s += fmt.Sprintf(f, h10, h20, h20, h30, h15)
 	for _, conn := range c.Server.Connections() {
 		playerName := "[Authenticating]"
-		roomName := "[UNKNOWN]"
-		var roomId IdType
-
+		locName := "[UNKNOWN]"
 		if conn.Authenticated && conn.Player != nil {
-			playerName = conn.Player.Name
-			if conn.Player.Room != nil {
-				roomName = conn.Player.Room.Name
-				roomId = conn.Player.Room.Id
-			}
+			playerName = conn.Player.String()
+			locName = c.LocationName(conn.Player.Location)
 		}
 
 		connId := fmt.Sprintf("%10d", conn.Id)
-		roomString := fmt.Sprintf("%s [%d]", roomName, roomId)
 		connected := conn.Connected.Format(time.RFC1123)
 		idle := time.Since(conn.LastActed).String()
 		
-		s += fmt.Sprintf(f, connId, playerName, roomString, connected, idle)
+		s += fmt.Sprintf(f, connId, playerName, locName, connected, idle)
 
 	}
 	s += "\n"
