@@ -132,15 +132,20 @@ type Location struct {
 	Type LocationType
 }
 
+type WorldDatabase struct {
+	// Data
+	PlayerId    IdType
+	RoomId      IdType
+	ItemId      IdType
+	DefaultRoom IdType
+	Players     map[IdType]*Player
+	Rooms       map[IdType]*Room
+	Items       map[IdType]*Item
+}
+
 type World struct {
 	// Data
-	playerId    IdType
-	roomId      IdType
-	itemId      IdType
-	DefaultRoom IdType
-	players     map[IdType]*Player
-	rooms       map[IdType]*Room
-	items       map[IdType]*Item
+	db WorldDatabase
 
 	// Channels
 	FindPlayer    chan FindPlayerMessage
@@ -161,13 +166,15 @@ type World struct {
 
 func NewWorld() *World {
 	w := &World{
-		playerId:    1,
-		roomId:      1,
-		itemId:      1,
-		DefaultRoom: 1,
-		rooms:       make(map[IdType]*Room),
-		players:     make(map[IdType]*Player),
-		items:       make(map[IdType]*Item),
+		db: WorldDatabase{
+			PlayerId:    1,
+			RoomId:      1,
+			ItemId:      1,
+			DefaultRoom: 1,
+			Rooms:       make(map[IdType]*Room),
+			Players:     make(map[IdType]*Player),
+			Items:       make(map[IdType]*Item),
+		},
 
 		FindPlayer:    make(chan FindPlayerMessage),
 		NewPlayer:     make(chan NewPlayerMessage),
@@ -185,18 +192,21 @@ func NewWorld() *World {
 		Shutdown:       make(chan bool),
 	}
 
-	i := w.roomId
-	w.roomId++
+	i := w.db.RoomId
+	w.db.RoomId++
 	r := &Room{
 		Id:    i,
 		Name:  "Main Lobby",
 		Desc:  "This is the main lobby.",
 		Owner: 1,
 	}
-	w.rooms[r.Id] = r
-	w.DefaultRoom = r.Id
+	w.db.Rooms[r.Id] = r
+	w.db.DefaultRoom = r.Id
 
 	return w
+}
+
+func (w *World) init() {
 }
 
 type FindPlayerMessage struct {
@@ -266,7 +276,7 @@ func (w *World) WorldThread() func() {
 			case e := <-w.FindPlayer:
 				r := make([]*Player, 0)
 				if e.Id > 0 {
-					p := w.players[e.Id]
+					p := w.db.Players[e.Id]
 					if p != nil {
 						r = append(r, p)
 					}
@@ -281,32 +291,32 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewPlayer:
 				log.Printf("New Player: %s\n", e.Name)
-				id := w.playerId
-				w.playerId++
+				id := w.db.PlayerId
+				w.db.PlayerId++
 				p := &Player{
 					Id:   id,
 					Name: e.Name,
 					Location: Location{
-						Id:   w.DefaultRoom,
+						Id:   w.db.DefaultRoom,
 						Type: L_ROOM,
 					},
 				}
 				if p.Id == 1 {
 					p.Admin = true
 				}
-				w.players[p.Id] = p
+				w.db.Players[p.Id] = p
 				e.Ack <- p
 			case e := <-w.DestroyPlayer:
 				if e.Id == 1 {
 					e.Ack <- false
 				}
 				log.Printf("Destroy Player: %d\n", e.Id)
-				delete(w.players, e.Id)
+				delete(w.db.Players, e.Id)
 				e.Ack <- true
 			case e := <-w.FindRoom:
 				r := make([]*Room, 0)
 				if e.Id > 0 {
-					v := w.rooms[e.Id]
+					v := w.db.Rooms[e.Id]
 					if v != nil {
 						r = append(r, v)
 					}
@@ -316,26 +326,26 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewRoom:
 				log.Printf("New Room: %s\n", e.Name)
-				id := w.roomId
-				w.roomId++
+				id := w.db.RoomId
+				w.db.RoomId++
 				r := &Room{
 					Id:    id,
 					Name:  e.Name,
 					Owner: e.Owner,
 				}
-				w.rooms[r.Id] = r
+				w.db.Rooms[r.Id] = r
 				e.Ack <- r
 			case e := <-w.DestroyRoom:
 				if e.Id == 1 {
 					e.Ack <- false
 				}
 				log.Printf("Destroy Room: %d\n", e.Id)
-				delete(w.rooms, e.Id)
+				delete(w.db.Rooms, e.Id)
 				e.Ack <- true
 			case e := <-w.FindItem:
 				r := make([]*Item, 0)
 				if e.Id > 0 {
-					i := w.items[e.Id]
+					i := w.db.Items[e.Id]
 					if i != nil {
 						r = append(r, i)
 					}
@@ -347,8 +357,8 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewItem:
 				log.Printf("New Item: %s\n", e.Name)
-				id := w.itemId
-				w.itemId++
+				id := w.db.ItemId
+				w.db.ItemId++
 				i := &Item{
 					Id:    id,
 					Name:  e.Name,
@@ -358,11 +368,11 @@ func (w *World) WorldThread() func() {
 						Type: L_PLAYER,
 					},
 				}
-				w.items[i.Id] = i
+				w.db.Items[i.Id] = i
 				e.Ack <- i
 			case e := <-w.DestroyItem:
 				log.Printf("Destroy Item: %d\n", e.Id)
-				delete(w.items, e.Id)
+				delete(w.db.Items, e.Id)
 				e.Ack <- true
 			case e := <-w.SaveWorldState:
 				e.Ack <- w.saveState()
@@ -377,7 +387,7 @@ func (w *World) WorldThread() func() {
 
 func (w *World) findPlayerByName(name string) *Player {
 	n := strings.ToLower(name)
-	for _, p := range w.players {
+	for _, p := range w.db.Players {
 		pn := strings.ToLower(p.Name)
 		if pn == n {
 			return p
@@ -388,7 +398,7 @@ func (w *World) findPlayerByName(name string) *Player {
 
 func (w *World) findPlayerByLocation(loc Location) []*Player {
 	r := make([]*Player, 0)
-	for _, p := range w.players {
+	for _, p := range w.db.Players {
 		if p.Location == loc {
 			r = append(r, p)
 		}
@@ -398,7 +408,7 @@ func (w *World) findPlayerByLocation(loc Location) []*Player {
 
 func (w *World) findRoomByOwner(id IdType) []*Room {
 	r := make([]*Room, 0)
-	for _, v := range w.rooms {
+	for _, v := range w.db.Rooms {
 		if v.Owner == id {
 			r = append(r, v)
 		}
@@ -408,7 +418,7 @@ func (w *World) findRoomByOwner(id IdType) []*Room {
 
 func (w *World) findItemByLocation(loc Location) []*Item {
 	r := make([]*Item, 0)
-	for _, i := range w.items {
+	for _, i := range w.db.Items {
 		if i.Location == loc {
 			r = append(r, i)
 		}
@@ -418,7 +428,7 @@ func (w *World) findItemByLocation(loc Location) []*Item {
 
 func (w *World) findItemByOwner(id IdType) []*Item {
 	r := make([]*Item, 0)
-	for _, i := range w.items {
+	for _, i := range w.db.Items {
 		if i.Owner == id {
 			r = append(r, i)
 		}
@@ -440,7 +450,7 @@ func (w *World) saveState() error {
 	}
 	defer file.Close()
 	enc := gob.NewEncoder(file)
-	err = enc.Encode(w)
+	err = enc.Encode(&w.db)
 	if err != nil {
 		log.Printf("ERROR: Could not encode world state: %s\n", err.Error())
 		return err
@@ -450,23 +460,26 @@ func (w *World) saveState() error {
 	if err != nil {
 		log.Printf("WARNING: Could not link %s to %s: %s\n", fn, mainFn, err.Error())
 	}
+	log.Printf("State Saved: %+v", w)
 	return nil
 }
 
 func LoadWorld() (*World, error) {
 	fn := "world.gob"
-	w := NewWorld()
 	file, err := os.Open(fn)
+	w := NewWorld()
 	if err != nil {
 		log.Printf("WARNING: Previous world state does not exist: %s\n", err.Error())
+		w := NewWorld()
 		return w, nil
 	}
 	defer file.Close()
 	dec := gob.NewDecoder(file)
-	err = dec.Decode(w)
+	err = dec.Decode(&w.db)
 	if err != nil {
 		log.Printf("ERROR: Could not load world state: %s\n", err.Error())
 		return nil, err
 	}
+	log.Printf("State Loaded: %+v", w)
 	return w, nil
 }

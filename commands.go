@@ -236,7 +236,44 @@ func addCommands(c *Connection) {
 		},
 	})
 
-	// TODO: Add take/drop
+	shell.AddCmd(&ishell.Cmd{
+		Name: "inventory",
+		Help: "List what you are carrying",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if c.Player == nil {
+				return
+			}
+			items := c.FindItemsByLocation(Location{Id: c.Player.Id, Type: L_PLAYER})
+			c.ListItems(items)
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "take",
+		Help: "Pick up an item from the room you are in.  Usage: take <name or id>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				c.Take(e.Args[0])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "drop",
+		Help: "Drop an item are carrying. Usage: drop <name or id>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				c.Drop(e.Args[0])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
 
 }
 
@@ -365,8 +402,12 @@ func lookRoom(c *Connection, r *Room) string {
 			}
 		}
 	}
+	itemsHere := c.FindItemsByLocation(c.Player.Location)
 	s := r.String() + "\n"
 	s += r.Desc + "\n"
+	for _, item := range itemsHere {
+		s += fmt.Sprintf("You see %s here.\n", item.Name)
+	}
 	for _, pName := range playersHere {
 		s += fmt.Sprintf("You see %s here.\n", pName)
 	}
@@ -422,4 +463,42 @@ func (c *Connection) ListItems(items []*Item) {
 		s += fmt.Sprintf("%10d %30s %30s\n", i.Id, i.Name, c.LocationName(i.Location))
 	}
 	c.Println(s)
+}
+
+func (c *Connection) Take(itemName string) {
+	if c.Player == nil {
+		return
+	}
+	item, foundItems := c.FindLocalItem(c.Player.Location, itemName)
+	if foundItems != nil {
+		// Multiple items found
+		c.Printf("Which item did you mean?\n")
+		c.ListItems(foundItems)
+	} else if item != nil {
+		// Single item found
+		item.Location = Location{Id: c.Player.Id, Type: L_PLAYER}
+		c.Emote(fmt.Sprintf("picks up %s", item.Name))
+	} else {
+		// No items found
+		c.Printf("That item is not here.\n")
+	}
+}
+
+func (c *Connection) Drop(itemName string) {
+	if c.Player == nil {
+		return
+	}
+	item, foundItems := c.FindLocalItem(Location{Id: c.Player.Id, Type: L_PLAYER}, itemName)
+	if foundItems != nil {
+		// Multiple items found
+		c.Printf("Which item did you mean?\n")
+		c.ListItems(foundItems)
+	} else if item != nil {
+		// Single item found
+		item.Location = c.Player.Location
+		c.Emote(fmt.Sprintf("drops %s", item.Name))
+	} else {
+		// No items found
+		c.Printf("You don't have that item.\n")
+	}
 }

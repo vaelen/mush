@@ -443,6 +443,45 @@ func (c *Connection) FindItemsByOwner(id IdType) []*Item {
 	return <-ack
 }
 
+func (c *Connection) FindItemsByLocation(loc Location) []*Item {
+	ack := make(chan []*Item)
+	c.Server.World.FindItem <- FindItemMessage{Location: &loc, Ack: ack}
+	return <-ack
+}
+
+func (c *Connection) FindLocalItem(loc Location, nameOrId string) (*Item, []*Item) {
+	if c.Player == nil {
+		return nil, nil
+	}
+	var item *Item
+	var foundItems []*Item
+	n := strings.TrimSpace(strings.ToLower(nameOrId))
+	id, err := ParseId(n)
+	if err != nil && id > 0 {
+		// Look up by id
+		i := c.FindItemById(id)
+		if i != nil && i.Location == loc {
+			item = i
+		}
+	} else {
+		// Look up by name
+		items := c.FindItemsByLocation(loc)
+		foundItems := make([]*Item, 0)
+		for _, i := range items {
+			x := strings.TrimSpace(strings.ToLower(i.Name))
+			// if this item's name contains the name we were given
+			if strings.Contains(x, n) {
+				foundItems = append(foundItems, i)
+			}
+		}
+		if len(foundItems) == 1 {
+			item = foundItems[0]
+			foundItems = nil
+		}
+	}
+	return item, foundItems
+}
+
 func (c *Connection) DestroyItem(id IdType) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
