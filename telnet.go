@@ -24,6 +24,7 @@ import (
 	"log"
 )
 
+// TelnetInterceptor intercepts telnet escape sequences in a stream.
 type TelnetInterceptor struct {
 	i     io.Reader
 	o     io.Writer
@@ -31,21 +32,21 @@ type TelnetInterceptor struct {
 }
 
 const (
-	T_SE   byte = 240
-	T_NOP  byte = 241
-	T_Data byte = 242
-	T_BRK  byte = 243
-	T_IP   byte = 244
-	T_AYT  byte = 245
-	T_EC   byte = 247
-	T_EL   byte = 248
-	T_GA   byte = 249
-	T_SB   byte = 250
-	T_WILL byte = 251
-	T_WONT byte = 252
-	T_DO   byte = 253
-	T_DONT byte = 254
-	T_IAC  byte = 255
+	escapeSe   byte = 240
+	escapeNoOp  byte = 241
+	escapeData byte = 242
+	escapeBreak  byte = 243
+	escapeIP   byte = 244
+	escapeAyt  byte = 245
+	escapeEc   byte = 247
+	escapeEl   byte = 248
+	escapeGa   byte = 249
+	escapeSb   byte = 250
+	escapeWill byte = 251
+	escapeWont byte = 252
+	escapeDo   byte = 253
+	escapeDoNT byte = 254
+	escapeIac  byte = 255
 )
 
 func (t TelnetInterceptor) Read(p []byte) (n int, err error) {
@@ -77,21 +78,21 @@ func (t TelnetInterceptor) Read(p []byte) (n int, err error) {
 					log.Printf("Third (Final) Byte: %d\n", b)
 				}
 				setting = b
-			case b == T_IAC:
+			case b == escapeIac:
 				// Exit sequence, output character 255
 				if t.Debug {
 					log.Printf("Escape (Final) Byte: %d\n", b)
 				}
 				inSeq = false
 				option = 0
-			case b >= T_SB:
+			case b >= escapeSb:
 				// Second byte of three byte sequence
 				if t.Debug {
 					log.Printf("Second Byte: %d\n", b)
 				}
 				option = b
 				continue
-			case b >= T_SE:
+			case b >= escapeSe:
 				// Exit sequence
 				if t.Debug {
 					log.Printf("Second (Final) Byte: %d\n", b)
@@ -108,7 +109,7 @@ func (t TelnetInterceptor) Read(p []byte) (n int, err error) {
 		}
 
 		if !inSeq {
-			if b == T_IAC {
+			if b == escapeIac {
 				inSeq = true
 				if t.Debug {
 					log.Printf("First Byte: %d\n", b)

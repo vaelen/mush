@@ -32,12 +32,18 @@ import (
 	"time"
 )
 
+// VersionName is the name of the server.
 const VersionName = "Vaelen/MUSH Server"
+// VersionMajor is the major release of the server.
 const VersionMajor = 0
+// VersionMinor is the minor release of the server.
 const VersionMinor = 0
+// VersionPatch is the patch release of the server.
 const VersionPatch = 1
+// VersionExtra contains additional version information about the server.
 const VersionExtra = ""
 
+// VersionString outputs the server's version string.
 func VersionString() string {
 	s := fmt.Sprintf("%s v%d.%d.%d", VersionName, VersionMajor, VersionMinor, VersionPatch)
 	if VersionExtra != "" {
@@ -46,10 +52,12 @@ func VersionString() string {
 	return s
 }
 
+// AuthenticationEnabled determines whether or not authentication is enabled on the server.
 const AuthenticationEnabled = false
 
+// Connection represents a connection to the server.
 type Connection struct {
-	Id            IdType
+	ID            IDType
 	C             net.Conn
 	Player        *Player
 	Shell         *ishell.Shell
@@ -59,20 +67,16 @@ type Connection struct {
 	LastActed     time.Time
 }
 
+// Server represents a server instance.
 type Server struct {
 	cm       *ConnectionManager
 	World    *World
 	Shutdown chan bool
 }
 
+// NewServer creates a new Server instance.
 func NewServer() Server {
-	cm := &ConnectionManager{
-		nextConnectionId: 1,
-		connections:      make([]*Connection, 0),
-		Opened:           make(chan ConnectionStateChange),
-		Closed:           make(chan ConnectionStateChange),
-		Shutdown:         make(chan bool),
-	}
+	cm := NewConnectionManager()
 	go cm.ConnectionManagerThread()()
 	w, err := LoadWorld()
 	if err != nil {
@@ -86,6 +90,7 @@ func NewServer() Server {
 	}
 }
 
+// StartServer starts the given Server instance, calling all necessary goroutines.
 func (s *Server) StartServer(addr string) {
 	log.Printf("Starting %s on %s\n", VersionString(), addr)
 	l, err := net.Listen("tcp", addr)
@@ -122,12 +127,12 @@ func (s *Server) StartServer(addr string) {
 				// This is a real error
 				log.Fatal(err)
 			}
-			go connectionWorker(s.NewConnection(conn))
+			go connectionWorker(s.newConnection(conn))
 		}
 	}
 }
 
-func (s *Server) NewConnection(conn net.Conn) *Connection {
+func (s *Server) newConnection(conn net.Conn) *Connection {
 	c := &Connection{
 		C: conn,
 		Player: &Player{
@@ -143,6 +148,7 @@ func (s *Server) NewConnection(conn net.Conn) *Connection {
 	return c
 }
 
+// Connections returns the list of open connections.
 func (s *Server) Connections() []*Connection {
 	return s.cm.Connections()
 }
@@ -153,34 +159,38 @@ func (c *Connection) String() string {
 	if c.Player != nil {
 		playerName = c.Player.String()
 	}
-	s := fmt.Sprintf("[ %d : %s / %s (%s) ]", c.Id, r.Network(), r.String(), playerName)
+	s := fmt.Sprintf("[ %d : %s / %s (%s) ]", c.ID, r.Network(), r.String(), playerName)
 	return s
 }
 
+// Log writes a log entry for the given connection.
 func (c *Connection) Log(format string, a ...interface{}) {
 	log.Printf("%s | %s\n", c.String(), fmt.Sprintf(format, a...))
 }
 
+// Printf writes text to the given connection.
 func (c *Connection) Printf(format string, a ...interface{}) {
 	if c.Shell != nil {
 		c.Shell.Printf(format, a...)
 	}
 }
 
+// Println writes text to the given connection.
 func (c *Connection) Println(a ...interface{}) {
 	if c.Shell != nil {
 		c.Shell.Println(a...)
 	}
 }
 
+// ReadLine reads a line of input from the given connection.
 func (c *Connection) ReadLine() string {
 	if c.Shell != nil {
 		return c.Shell.ReadLine()
-	} else {
-		return ""
 	}
+	return ""
 }
 
+// Close closes the given connection.
 func (c *Connection) Close() {
 	defer c.C.Close()
 	c.Log("Connection closed")
@@ -235,34 +245,38 @@ func createShell(c *Connection) {
 	})
 }
 
+// Wall writes a string to all open connections.
 func (s *Server) Wall(format string, a ...interface{}) {
 	for _, c := range s.Connections() {
 		c.Printf(format, a...)
 	}
 }
 
+// DisableEcho sends the telnet escape sequence to disable local echo.
 func DisableEcho(c io.Writer) {
 	// ANSI Escape Sequence to Disable Local Echo
 	// b := []byte("\x1b[12h")
 	// Telnet sequence to disable echo
 	b := []byte{0xFF, 0xFB, 0x01}
-	WriteBytes(c, b)
+	writeBytes(c, b)
 }
 
+// EnableEcho sends the telnet escape sequence to enable local echo.
 func EnableEcho(c io.Writer) {
 	// ANSI Escape Sequence to Enable Local Echo
 	// b := []byte("\x1b[12h")
 	// Telnet sequence to enable echo
 	b := []byte{0xFF, 0xFC, 0x01}
-	WriteBytes(c, b)
+	writeBytes(c, b)
 }
 
-func WriteBytes(c io.Writer, b []byte) {
+func writeBytes(c io.Writer, b []byte) {
 	o := bufio.NewWriter(c)
 	o.Write(b)
 	o.Flush()
 }
 
+// Login performs a login on the given connection.
 func Login(c *Connection) (bool, error) {
 	r := bufio.NewReader(TelnetInterceptor{i: c.C, o: c.C})
 	w := bufio.NewWriter(c.C)
@@ -330,21 +344,22 @@ func Login(c *Connection) (bool, error) {
 
 // Helper Methods
 
+// LocationName is a helper method that returns the name of a given location.
 func (c *Connection) LocationName(loc Location) string {
 	locName := "[UNKNOWN]"
 	switch loc.Type {
-	case L_ROOM:
-		r := c.FindRoomById(loc.Id)
+	case LocationRoom:
+		r := c.FindRoomByID(loc.ID)
 		if r != nil {
 			locName = r.String()
 		}
-	case L_PLAYER:
-		p := c.FindPlayerById(loc.Id)
+	case LocationPlayer:
+		p := c.FindPlayerByID(loc.ID)
 		if p != nil {
 			locName = p.String()
 		}
-	case L_ITEM:
-		i := c.FindItemById(loc.Id)
+	case LocationItem:
+		i := c.FindItemByID(loc.ID)
 		if i != nil {
 			locName = i.String()
 		}
@@ -352,114 +367,121 @@ func (c *Connection) LocationName(loc Location) string {
 	return locName
 }
 
-func (c *Connection) FindPlayerById(id IdType) *Player {
+// FindPlayerByID is a helper method that returns a player based on their ID.
+func (c *Connection) FindPlayerByID(id IDType) *Player {
 	ack := make(chan []*Player)
-	c.Server.World.FindPlayer <- FindPlayerMessage{Id: id, Ack: ack}
+	c.Server.World.FindPlayer <- FindPlayerMessage{ID: id, Ack: ack}
 	players := <-ack
 	if len(players) == 0 {
 		return nil
-	} else {
-		return players[0]
 	}
+	return players[0]
 }
 
+// FindPlayerByName is a helper method that returns a player based on their name.
 func (c *Connection) FindPlayerByName(name string) *Player {
 	ack := make(chan []*Player)
 	c.Server.World.FindPlayer <- FindPlayerMessage{Name: name, Ack: ack}
 	players := <-ack
 	if len(players) == 0 {
 		return nil
-	} else {
-		return players[0]
 	}
+	return players[0]
 }
 
+// NewRoom is a helper method for creating a new room.
 func (c *Connection) NewRoom(name string) *Room {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
 	}
 	ack := make(chan *Room)
-	c.Server.World.NewRoom <- NewRoomMessage{Name: name, Owner: c.Player.Id, Ack: ack}
+	c.Server.World.NewRoom <- NewRoomMessage{Name: name, Owner: c.Player.ID, Ack: ack}
 	return <-ack
 }
 
-func (c *Connection) FindRoomById(id IdType) *Room {
+// FindRoomByID is a helper method that returns a room based on its ID.
+func (c *Connection) FindRoomByID(id IDType) *Room {
 	ack := make(chan []*Room)
-	c.Server.World.FindRoom <- FindRoomMessage{Id: id, Ack: ack}
+	c.Server.World.FindRoom <- FindRoomMessage{ID: id, Ack: ack}
 	rooms := <-ack
 	if len(rooms) == 0 {
 		return nil
-	} else {
-		return rooms[0]
 	}
+	return rooms[0]
 }
 
-func (c *Connection) FindRoomsByOwner(id IdType) []*Room {
+// FindRoomsByOwner is a helper method that returns a slice of rooms that belong to the given player.
+func (c *Connection) FindRoomsByOwner(id IDType) []*Room {
 	ack := make(chan []*Room)
 	c.Server.World.FindRoom <- FindRoomMessage{Owner: id, Ack: ack}
 	return <-ack
 }
 
-func (c *Connection) DestroyRoom(id IdType) *Room {
+// DestroyRoom is a helper method that destroys a room.
+func (c *Connection) DestroyRoom(id IDType) *Room {
 	if c == nil || !c.Authenticated || c.Player == nil || id < 2 {
 		return nil
 	}
-	r := c.FindRoomById(id)
-	if r == nil || (r.Owner != c.Player.Id && !c.Player.Admin) {
+	r := c.FindRoomByID(id)
+	if r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
 		// Can't Destroy
 		return nil
 	}
 
 	ack := make(chan bool)
-	c.Server.World.DestroyRoom <- DestroyRoomMessage{Id: id, Ack: ack}
+	c.Server.World.DestroyRoom <- DestroyRoomMessage{ID: id, Ack: ack}
 	<-ack
 
 	return r
 }
 
+// NewItem is a helper method that creates a new item.
 func (c *Connection) NewItem(name string) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
 	}
 	ack := make(chan *Item)
-	c.Server.World.NewItem <- NewItemMessage{Name: name, Owner: c.Player.Id, Ack: ack}
+	c.Server.World.NewItem <- NewItemMessage{Name: name, Owner: c.Player.ID, Ack: ack}
 	return <-ack
 }
 
-func (c *Connection) FindItemById(id IdType) *Item {
+// FindItemByID is a helper method that finds an item based on its ID.
+func (c *Connection) FindItemByID(id IDType) *Item {
 	ack := make(chan []*Item)
-	c.Server.World.FindItem <- FindItemMessage{Id: id, Ack: ack}
+	c.Server.World.FindItem <- FindItemMessage{ID: id, Ack: ack}
 	items := <-ack
 	if len(items) == 0 {
 		return nil
-	} else {
-		return items[0]
 	}
+	return items[0]
 }
 
-func (c *Connection) FindItemsByOwner(id IdType) []*Item {
+// FindItemsByOwner is a helper method that finds a slice of items that belong to the given player.
+func (c *Connection) FindItemsByOwner(id IDType) []*Item {
 	ack := make(chan []*Item)
 	c.Server.World.FindItem <- FindItemMessage{Owner: id, Ack: ack}
 	return <-ack
 }
 
+// FindItemsByLocation is a helper method that finds a slice of items in a given location.
 func (c *Connection) FindItemsByLocation(loc Location) []*Item {
 	ack := make(chan []*Item)
 	c.Server.World.FindItem <- FindItemMessage{Location: &loc, Ack: ack}
 	return <-ack
 }
 
-func (c *Connection) FindLocalItem(loc Location, nameOrId string) (*Item, []*Item) {
+// FindLocalItem is a helper method for finding an item in a given location.
+func (c *Connection) FindLocalItem(loc Location, nameOrID string) (*Item, []*Item) {
 	if c.Player == nil {
 		return nil, nil
 	}
 	var item *Item
 	var foundItems []*Item
-	n := strings.TrimSpace(strings.ToLower(nameOrId))
-	id, err := ParseId(n)
+	n := strings.TrimSpace(strings.ToLower(nameOrID))
+	id, err := ParseID(n)
 	if err != nil && id > 0 {
 		// Look up by id
-		i := c.FindItemById(id)
+		i := c.FindItemByID(id)
 		if i != nil && i.Location == loc {
 			item = i
 		}
@@ -482,18 +504,19 @@ func (c *Connection) FindLocalItem(loc Location, nameOrId string) (*Item, []*Ite
 	return item, foundItems
 }
 
-func (c *Connection) DestroyItem(id IdType) *Item {
+// DestroyItem is a helper method that destroy an item.
+func (c *Connection) DestroyItem(id IDType) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
 	}
-	i := c.FindItemById(id)
-	if i == nil || (i.Owner != c.Player.Id && !c.Player.Admin) {
+	i := c.FindItemByID(id)
+	if i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
 		// Can't Destroy
 		return nil
 	}
 
 	ack := make(chan bool)
-	c.Server.World.DestroyItem <- DestroyItemMessage{Id: id, Ack: ack}
+	c.Server.World.DestroyItem <- DestroyItemMessage{ID: id, Ack: ack}
 	<-ack
 
 	return i

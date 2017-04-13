@@ -24,20 +24,38 @@ import (
 	"sync"
 )
 
+// ConnectionManager maintains open connections to the server
 type ConnectionManager struct {
 	connections      []*Connection
 	connMutex        sync.RWMutex
-	nextConnectionId IdType
+	nextConnectionID IDType
+	// Opened: Sending a ConnectionStateChange message to this channel adds the connection to the ConnectionManager.
 	Opened           chan ConnectionStateChange
+	// Closed: Sending a ConnectionStateChange message to this channel removes the connection from the ConnectionManager.
 	Closed           chan ConnectionStateChange
+	// Shutdown: Sending true to this channel shuts down the ConnectionManager.
 	Shutdown         chan bool
 }
 
+// ConnectionStateChange is an event that is fired when a connection changes state.
 type ConnectionStateChange struct {
 	c   *Connection
 	ack chan bool
 }
 
+// NewConnectionManager creates a new ConnectionManager instance.
+func NewConnectionManager() *ConnectionManager {
+	return  &ConnectionManager{
+		nextConnectionID: 1,
+		connections:      make([]*Connection, 0),
+		Opened:           make(chan ConnectionStateChange),
+		Closed:           make(chan ConnectionStateChange),
+		Shutdown:         make(chan bool),
+	}
+}
+
+
+// Connections returns a slice of the currently open connections.
 func (m *ConnectionManager) Connections() []*Connection {
 	m.connMutex.RLock()
 	defer m.connMutex.RUnlock()
@@ -46,11 +64,11 @@ func (m *ConnectionManager) Connections() []*Connection {
 	return c
 }
 
-// This method is not threadsafe
-func (m *ConnectionManager) findConnection(id IdType) int {
+// findConnection iterates through the connections slice for a given connection id and returns the first matching connection.
+func (m *ConnectionManager) findConnection(id IDType) int {
 	i := -1
 	for n, c := range m.connections {
-		if c.Id == id {
+		if c.ID == id {
 			i = n
 			break
 		}
@@ -58,27 +76,29 @@ func (m *ConnectionManager) findConnection(id IdType) int {
 	return i
 }
 
-func (m *ConnectionManager) AddConnection(c *Connection) {
+// addConnection adds a connection to the connection manager's connections slice.
+func (m *ConnectionManager) addConnection(c *Connection) {
 	log.Println("Got Connection")
 	m.connMutex.Lock()
 	defer m.connMutex.Unlock()
-	if m.findConnection(c.Id) > -1 {
+	if m.findConnection(c.ID) > -1 {
 		// Connection is already in the list
 		return
 	}
-	i := m.nextConnectionId
-	m.nextConnectionId++
-	c.Id = i
+	i := m.nextConnectionID
+	m.nextConnectionID++
+	c.ID = i
 	m.connections = append(m.connections, c)
 	log.Printf("Open Connections: %d\n", len(m.connections))
 }
 
-func (m *ConnectionManager) RemoveConnection(c *Connection) {
+// removeConnection removes a connection from the connection manager's connections slice.
+func (m *ConnectionManager) removeConnection(c *Connection) {
 	log.Println("Connection Closed")
 	m.connMutex.Lock()
 	defer m.connMutex.Unlock()
 	// Find element to be removed
-	i := m.findConnection(c.Id)
+	i := m.findConnection(c.ID)
 	if i < 0 {
 		// Connection is not in the list
 		return
@@ -90,6 +110,9 @@ func (m *ConnectionManager) RemoveConnection(c *Connection) {
 	log.Printf("Open Connections: %d\n", len(m.connections))
 }
 
+// ConnectionManagerThread returns a goroutine for the Connection Manager.
+// This goroutine must be running for the ConnectionManager to operate.
+// Running multiple copies of this goroutine for the same ConnectionManager will produce unknown side effects.
 func (m *ConnectionManager) ConnectionManagerThread() func() {
 	return func() {
 		log.Println("Connection Manager Started")
@@ -97,10 +120,10 @@ func (m *ConnectionManager) ConnectionManagerThread() func() {
 		for {
 			select {
 			case e := <-m.Opened:
-				m.AddConnection(e.c)
+				m.addConnection(e.c)
 				e.ack <- true
 			case e := <-m.Closed:
-				m.RemoveConnection(e.c)
+				m.removeConnection(e.c)
 				e.ack <- true
 			case <-m.Shutdown:
 				for _, c := range m.Connections() {

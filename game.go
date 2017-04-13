@@ -30,20 +30,24 @@ import (
 	"time"
 )
 
+// SaveStateFrequency represents how often the game's state should be saved.
 const SaveStateFrequency time.Duration = time.Minute * 30
 
-type IdType uint64
+// IDType is the type used for all ID values
+type IDType uint64
 
-func ParseId(s string) (IdType, error) {
+// ParseID parses a string to an IDType
+func ParseID(s string) (IDType, error) {
 	i, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		return 0, errors.New("Couldn't parse id: " + s)
 	}
-	return IdType(i), nil
+	return IDType(i), nil
 }
 
+// Player represents a player in the world.
 type Player struct {
-	Id       IdType
+	ID       IDType
 	Name     string
 	Location Location
 	Admin    bool
@@ -53,15 +57,16 @@ func (p *Player) String() string {
 	if p == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [P: %d]", p.Name, p.Id)
+	return fmt.Sprintf("%s [P: %d]", p.Name, p.ID)
 }
 
+// Room represents a room in the world.
 type Room struct {
-	Id    IdType
+	ID    IDType
 	Name  string
 	Desc  string
 	Exits []Exit
-	Owner IdType
+	Owner IDType
 	Attr  map[string]string
 }
 
@@ -69,39 +74,35 @@ func (r *Room) String() string {
 	if r == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [R: %d]", r.Name, r.Id)
+	return fmt.Sprintf("%s [R: %d]", r.Name, r.ID)
 }
 
-func NewRoom() *Room {
-	return &Room{
-		Attr: make(map[string]string),
-	}
-}
-
+// Exit represents an exit between two rooms.
 type Exit struct {
-	Id       IdType
+	ID       IDType
 	Name     string
 	Desc     string
 	Dest     Room
-	Owner    IdType
+	Owner    IDType
 	Hidden   bool
 	Lockable bool
 	Locked   bool
-	Key      IdType
+	Key      IDType
 	Attr     map[string]string
 }
 
-func NewExit() *Exit {
+func newExit() *Exit {
 	return &Exit{
 		Attr: make(map[string]string),
 	}
 }
 
+// Item represents an item in the world.
 type Item struct {
-	Id       IdType
+	ID       IDType
 	Name     string
 	Desc     string
-	Owner    IdType
+	Owner    IDType
 	Location Location
 	Attr     map[string]string
 }
@@ -110,44 +111,46 @@ func (i *Item) String() string {
 	if i == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [I: %d]", i.Name, i.Id)
+	return fmt.Sprintf("%s [I: %d]", i.Name, i.ID)
 }
 
-func NewItem() *Item {
-	return &Item{
-		Attr: make(map[string]string),
-	}
-}
-
+// LocationType is used to represent the type of a Location.
 type LocationType uint8
 
 const (
-	L_ROOM LocationType = iota
-	L_PLAYER
-	L_ITEM
+	// LocationRoom means that the location is a room.
+	LocationRoom LocationType = iota
+	// LocationPlayer means that the location is a player.
+	LocationPlayer
+	// LocationItem means that the location is an item.
+	LocationItem
 )
 
+// Location represents the location of a player or item.
 type Location struct {
-	Id   IdType
+	ID   IDType
 	Type LocationType
 }
 
+// WorldDatabase holds all of the players, rooms, and items in the world.
 type WorldDatabase struct {
 	// Data
-	PlayerId    IdType
-	RoomId      IdType
-	ItemId      IdType
-	DefaultRoom IdType
-	Players     map[IdType]*Player
-	Rooms       map[IdType]*Room
-	Items       map[IdType]*Item
+	PlayerID    IDType
+	RoomID      IDType
+	ItemID      IDType
+	DefaultRoom IDType
+	Players     map[IDType]*Player
+	Rooms       map[IDType]*Room
+	Items       map[IDType]*Item
 }
 
+// World contains a WorldDatabase and all of the channels needed to modify it.
 type World struct {
 	// Data
 	db WorldDatabase
 
 	// Channels
+
 	FindPlayer    chan FindPlayerMessage
 	NewPlayer     chan NewPlayerMessage
 	DestroyPlayer chan DestroyPlayerMessage
@@ -164,16 +167,17 @@ type World struct {
 	Shutdown       chan bool
 }
 
+// NewWorld creates a new World instance
 func NewWorld() *World {
 	w := &World{
 		db: WorldDatabase{
-			PlayerId:    1,
-			RoomId:      1,
-			ItemId:      1,
+			PlayerID:    1,
+			RoomID:      1,
+			ItemID:      1,
 			DefaultRoom: 1,
-			Rooms:       make(map[IdType]*Room),
-			Players:     make(map[IdType]*Player),
-			Items:       make(map[IdType]*Item),
+			Rooms:       make(map[IDType]*Room),
+			Players:     make(map[IDType]*Player),
+			Items:       make(map[IDType]*Item),
 		},
 
 		FindPlayer:    make(chan FindPlayerMessage),
@@ -192,80 +196,89 @@ func NewWorld() *World {
 		Shutdown:       make(chan bool),
 	}
 
-	i := w.db.RoomId
-	w.db.RoomId++
+	i := w.db.RoomID
+	w.db.RoomID++
 	r := &Room{
-		Id:    i,
+		ID:    i,
 		Name:  "Main Lobby",
 		Desc:  "This is the main lobby.",
 		Owner: 1,
+		Attr: make(map[string]string),
 	}
-	w.db.Rooms[r.Id] = r
-	w.db.DefaultRoom = r.Id
+	w.db.Rooms[r.ID] = r
+	w.db.DefaultRoom = r.ID
 
 	return w
 }
 
-func (w *World) init() {
-}
-
+// FindPlayerMessage is sent to FindPlayer to find a set of players.
 type FindPlayerMessage struct {
-	Id       IdType
+	ID       IDType
 	Name     string
 	Location *Location
 	Ack      chan []*Player
 }
 
+// NewPlayerMessage is sent to NewPlayer to create a new player.
 type NewPlayerMessage struct {
 	Name  string
-	Owner IdType
+	Owner IDType
 	Ack   chan *Player
 }
 
+// DestroyPlayerMessage is sent to DestroyPlayer to destroy a given player.
 type DestroyPlayerMessage struct {
-	Id  IdType
+	ID  IDType
 	Ack chan bool
 }
 
+// FindRoomMessage is sent to FindRoom to find a set of rooms.
 type FindRoomMessage struct {
-	Id    IdType
-	Owner IdType
+	ID    IDType
+	Owner IDType
 	Ack   chan []*Room
 }
 
+// NewRoomMessage is sent to NewRoom to create a new room.
 type NewRoomMessage struct {
 	Name  string
-	Owner IdType
+	Owner IDType
 	Ack   chan *Room
 }
 
+// DestroyRoomMessage is sent to DestroyRoom to destroy a room.
 type DestroyRoomMessage struct {
-	Id  IdType
+	ID  IDType
 	Ack chan bool
 }
 
+// FindItemMessage is sent to FindItem to find a set of items.
 type FindItemMessage struct {
-	Id       IdType
-	Owner    IdType
+	ID       IDType
+	Owner    IDType
 	Location *Location
 	Ack      chan []*Item
 }
 
+// NewItemMessage is sent to NewItem to create a new item.
 type NewItemMessage struct {
 	Name  string
-	Owner IdType
+	Owner IDType
 	Ack   chan *Item
 }
 
+// DestroyItemMessage is sent to DestroyItem to destroy an item.
 type DestroyItemMessage struct {
-	Id  IdType
+	ID  IDType
 	Ack chan bool
 }
 
+// SaveWorldStateMessage is sent to SaveWorldState to save the world's current state to disk.
 type SaveWorldStateMessage struct {
 	Ack chan error
 }
 
+// WorldThread returns a goroutine that handles World events.
 func (w *World) WorldThread() func() {
 	return func() {
 		log.Println("World Thread Started")
@@ -275,8 +288,8 @@ func (w *World) WorldThread() func() {
 			select {
 			case e := <-w.FindPlayer:
 				r := make([]*Player, 0)
-				if e.Id > 0 {
-					p := w.db.Players[e.Id]
+				if e.ID > 0 {
+					p := w.db.Players[e.ID]
 					if p != nil {
 						r = append(r, p)
 					}
@@ -291,32 +304,32 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewPlayer:
 				log.Printf("New Player: %s\n", e.Name)
-				id := w.db.PlayerId
-				w.db.PlayerId++
+				id := w.db.PlayerID
+				w.db.PlayerID++
 				p := &Player{
-					Id:   id,
+					ID:   id,
 					Name: e.Name,
 					Location: Location{
-						Id:   w.db.DefaultRoom,
-						Type: L_ROOM,
+						ID:   w.db.DefaultRoom,
+						Type: LocationRoom,
 					},
 				}
-				if p.Id == 1 {
+				if p.ID == 1 {
 					p.Admin = true
 				}
-				w.db.Players[p.Id] = p
+				w.db.Players[p.ID] = p
 				e.Ack <- p
 			case e := <-w.DestroyPlayer:
-				if e.Id == 1 {
+				if e.ID == 1 {
 					e.Ack <- false
 				}
-				log.Printf("Destroy Player: %d\n", e.Id)
-				delete(w.db.Players, e.Id)
+				log.Printf("Destroy Player: %d\n", e.ID)
+				delete(w.db.Players, e.ID)
 				e.Ack <- true
 			case e := <-w.FindRoom:
 				r := make([]*Room, 0)
-				if e.Id > 0 {
-					v := w.db.Rooms[e.Id]
+				if e.ID > 0 {
+					v := w.db.Rooms[e.ID]
 					if v != nil {
 						r = append(r, v)
 					}
@@ -326,26 +339,27 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewRoom:
 				log.Printf("New Room: %s\n", e.Name)
-				id := w.db.RoomId
-				w.db.RoomId++
+				id := w.db.RoomID
+				w.db.RoomID++
 				r := &Room{
-					Id:    id,
+					ID:    id,
 					Name:  e.Name,
 					Owner: e.Owner,
+					Attr: make(map[string]string),
 				}
-				w.db.Rooms[r.Id] = r
+				w.db.Rooms[r.ID] = r
 				e.Ack <- r
 			case e := <-w.DestroyRoom:
-				if e.Id == 1 {
+				if e.ID == 1 {
 					e.Ack <- false
 				}
-				log.Printf("Destroy Room: %d\n", e.Id)
-				delete(w.db.Rooms, e.Id)
+				log.Printf("Destroy Room: %d\n", e.ID)
+				delete(w.db.Rooms, e.ID)
 				e.Ack <- true
 			case e := <-w.FindItem:
 				r := make([]*Item, 0)
-				if e.Id > 0 {
-					i := w.db.Items[e.Id]
+				if e.ID > 0 {
+					i := w.db.Items[e.ID]
 					if i != nil {
 						r = append(r, i)
 					}
@@ -357,22 +371,23 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewItem:
 				log.Printf("New Item: %s\n", e.Name)
-				id := w.db.ItemId
-				w.db.ItemId++
+				id := w.db.ItemID
+				w.db.ItemID++
 				i := &Item{
-					Id:    id,
+					ID:    id,
 					Name:  e.Name,
 					Owner: e.Owner,
 					Location: Location{
-						Id:   e.Owner,
-						Type: L_PLAYER,
+						ID:   e.Owner,
+						Type: LocationPlayer,
 					},
+					Attr: make(map[string]string),
 				}
-				w.db.Items[i.Id] = i
+				w.db.Items[i.ID] = i
 				e.Ack <- i
 			case e := <-w.DestroyItem:
-				log.Printf("Destroy Item: %d\n", e.Id)
-				delete(w.db.Items, e.Id)
+				log.Printf("Destroy Item: %d\n", e.ID)
+				delete(w.db.Items, e.ID)
 				e.Ack <- true
 			case e := <-w.SaveWorldState:
 				e.Ack <- w.saveState()
@@ -406,7 +421,7 @@ func (w *World) findPlayerByLocation(loc Location) []*Player {
 	return r
 }
 
-func (w *World) findRoomByOwner(id IdType) []*Room {
+func (w *World) findRoomByOwner(id IDType) []*Room {
 	r := make([]*Room, 0)
 	for _, v := range w.db.Rooms {
 		if v.Owner == id {
@@ -426,7 +441,7 @@ func (w *World) findItemByLocation(loc Location) []*Item {
 	return r
 }
 
-func (w *World) findItemByOwner(id IdType) []*Item {
+func (w *World) findItemByOwner(id IDType) []*Item {
 	r := make([]*Item, 0)
 	for _, i := range w.db.Items {
 		if i.Owner == id {
@@ -464,6 +479,7 @@ func (w *World) saveState() error {
 	return nil
 }
 
+// LoadWorld loads a World from disk.
 func LoadWorld() (*World, error) {
 	fn := "world.gob"
 	file, err := os.Open(fn)

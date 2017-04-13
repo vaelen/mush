@@ -183,7 +183,7 @@ func addCommands(c *Connection) {
 			c.updateIdleTime()
 			if len(e.Args) > 1 {
 				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
-				id, err := ParseId(e.Args[1])
+				id, err := ParseID(e.Args[1])
 				if err != nil {
 					c.Printf("Couldn't parse id: %s\n", e.Args[1])
 					return
@@ -222,10 +222,10 @@ func addCommands(c *Connection) {
 			if len(e.Args) > 0 {
 				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
 				if t == "rooms" {
-					rooms := c.FindRoomsByOwner(c.Player.Id)
+					rooms := c.FindRoomsByOwner(c.Player.ID)
 					c.ListRooms(rooms)
 				} else if t == "items" {
-					items := c.FindItemsByOwner(c.Player.Id)
+					items := c.FindItemsByOwner(c.Player.ID)
 					c.ListItems(items)
 				} else {
 					c.Println(e.Cmd.HelpText())
@@ -244,7 +244,7 @@ func addCommands(c *Connection) {
 			if c.Player == nil {
 				return
 			}
-			items := c.FindItemsByLocation(Location{Id: c.Player.Id, Type: L_PLAYER})
+			items := c.FindItemsByLocation(Location{ID: c.Player.ID, Type: LocationPlayer})
 			c.ListItems(items)
 		},
 	})
@@ -277,6 +277,7 @@ func addCommands(c *Connection) {
 
 }
 
+// IsAdmin returns true if the player is an admin.
 func (c *Connection) IsAdmin() bool {
 	return c != nil && c.Authenticated && c.Player != nil && c.Player.Admin
 }
@@ -285,13 +286,13 @@ func (c *Connection) updateIdleTime() {
 	c.LastActed = time.Now()
 }
 
-func (c *Connection) findPlayerConnectionByName(target string) (targetId IdType, targetName string) {
+func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType, targetName string) {
 	t := strings.ToLower(target)
 	for _, conn := range c.Server.Connections() {
 		if conn.Authenticated && conn.Player != nil {
 			n := strings.ToLower(conn.Player.Name)
 			if t == n {
-				targetId = conn.Id
+				targetID = conn.ID
 				targetName = conn.Player.Name
 				break
 			}
@@ -300,8 +301,9 @@ func (c *Connection) findPlayerConnectionByName(target string) (targetId IdType,
 	return
 }
 
+// Say executes the "say" command for the given player.
 func (c *Connection) Say(target string, phrase string) {
-	targetId, targetName := c.findPlayerConnectionByName(target)
+	targetID, targetName := c.findPlayerConnectionByName(target)
 
 	if target != "" {
 		if targetName == "" {
@@ -315,9 +317,9 @@ func (c *Connection) Say(target string, phrase string) {
 		switch {
 		case !conn.Authenticated:
 			// Do Nothing
-		case conn.Id == c.Id:
+		case conn.ID == c.ID:
 			// Do Nothing
-		case conn.Id == targetId && target != "":
+		case conn.ID == targetID && target != "":
 			conn.Printf("%s says \"%s\" to you.\n", c.Player.Name, phrase)
 		case target == "":
 			conn.Printf("%s says \"%s\".\n", c.Player.Name, phrase)
@@ -333,8 +335,9 @@ func (c *Connection) Say(target string, phrase string) {
 
 }
 
+// Whisper executes the "whisper" command for the given player.
 func (c *Connection) Whisper(target string, phrase string) {
-	targetId, targetName := c.findPlayerConnectionByName(target)
+	targetID, targetName := c.findPlayerConnectionByName(target)
 
 	if targetName == "" {
 		c.Printf("Couldn't find player %s\n", target)
@@ -345,9 +348,9 @@ func (c *Connection) Whisper(target string, phrase string) {
 		switch {
 		case !conn.Authenticated:
 			// Do Nothing
-		case conn.Id == c.Id:
+		case conn.ID == c.ID:
 			// Do Nothing
-		case conn.Id == targetId:
+		case conn.ID == targetID:
 			conn.Printf("%s whispers \"%s\".\n", c.Player.Name, phrase)
 		default:
 			conn.Printf("%s whispers to %s.\n", c.Player.Name, targetName)
@@ -356,6 +359,8 @@ func (c *Connection) Whisper(target string, phrase string) {
 	c.Printf("You whisper \"%s\" to %s.\n", phrase, targetName)
 }
 
+// Emote executes the "emote" command for the given player.
+// It can also be used by other commands to say that the player did something.
 func (c *Connection) Emote(action string) {
 	for _, conn := range c.Server.Connections() {
 		switch {
@@ -367,6 +372,7 @@ func (c *Connection) Emote(action string) {
 	}
 }
 
+// Look executes the "look" command for the given player.
 func (c *Connection) Look() {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return
@@ -374,8 +380,8 @@ func (c *Connection) Look() {
 	loc := c.Player.Location
 	s := ""
 	switch loc.Type {
-	case L_ROOM:
-		r := c.FindRoomById(loc.Id)
+	case LocationRoom:
+		r := c.FindRoomByID(loc.ID)
 		if r == nil {
 			s = "You are lost.\n"
 		} else {
@@ -396,8 +402,8 @@ func lookRoom(c *Connection, r *Room) string {
 	playersHere := make([]string, 0)
 	for _, conn := range c.Server.Connections() {
 		p2 := conn.Player
-		if conn.Authenticated && p2 != nil && p2.Id != p.Id {
-			if p2.Location.Type == L_ROOM && p2.Location.Id == r.Id {
+		if conn.Authenticated && p2 != nil && p2.ID != p.ID {
+			if p2.Location.Type == LocationRoom && p2.Location.ID == r.ID {
 				playersHere = append(playersHere, p.Name)
 			}
 		}
@@ -422,6 +428,7 @@ const (
 	h30 = "------------------------------"
 )
 
+// Who shows a list of the currently logged in players.
 // TODO: Have the column widths auto-adjust to fit the data
 func (c *Connection) Who() {
 	s := "Players Currently Online:\n"
@@ -436,35 +443,38 @@ func (c *Connection) Who() {
 			locName = c.LocationName(conn.Player.Location)
 		}
 
-		connId := fmt.Sprintf("%10d", conn.Id)
+		connID := fmt.Sprintf("%10d", conn.ID)
 		connected := conn.Connected.Format(time.RFC1123)
 		idle := time.Since(conn.LastActed).String()
 
-		s += fmt.Sprintf(f, connId, playerName, locName, connected, idle)
+		s += fmt.Sprintf(f, connID, playerName, locName, connected, idle)
 
 	}
 	s += "\n"
 	c.Printf(s)
 }
 
+// ListRooms displays a list of the given rooms.
 func (c *Connection) ListRooms(rooms []*Room) {
-	s := fmt.Sprintf("%10s %30s\n", "Id", "Room Name")
+	s := fmt.Sprintf("%10s %30s\n", "ID", "Room Name")
 	s += fmt.Sprintf("%10s %30s\n", h10, h30)
 	for _, r := range rooms {
-		s += fmt.Sprintf("%10d %30s\n", r.Id, r.Name)
+		s += fmt.Sprintf("%10d %30s\n", r.ID, r.Name)
 	}
 	c.Println(s)
 }
 
+// ListItems displays a list of the given items.
 func (c *Connection) ListItems(items []*Item) {
-	s := fmt.Sprintf("%10s %30s %30s\n", "Id", "Item Name", "Location")
+	s := fmt.Sprintf("%10s %30s %30s\n", "ID", "Item Name", "Location")
 	s += fmt.Sprintf("%10s %30s %30s\n", h10, h30, h30)
 	for _, i := range items {
-		s += fmt.Sprintf("%10d %30s %30s\n", i.Id, i.Name, c.LocationName(i.Location))
+		s += fmt.Sprintf("%10d %30s %30s\n", i.ID, i.Name, c.LocationName(i.Location))
 	}
 	c.Println(s)
 }
 
+// Take executes the "take" command and moves an item into the player's inventory.
 func (c *Connection) Take(itemName string) {
 	if c.Player == nil {
 		return
@@ -476,7 +486,7 @@ func (c *Connection) Take(itemName string) {
 		c.ListItems(foundItems)
 	} else if item != nil {
 		// Single item found
-		item.Location = Location{Id: c.Player.Id, Type: L_PLAYER}
+		item.Location = Location{ID: c.Player.ID, Type: LocationPlayer}
 		c.Emote(fmt.Sprintf("picks up %s", item.Name))
 	} else {
 		// No items found
@@ -484,11 +494,12 @@ func (c *Connection) Take(itemName string) {
 	}
 }
 
+// Drop executes the "drop" command and moves an item out of the player's inventory.
 func (c *Connection) Drop(itemName string) {
 	if c.Player == nil {
 		return
 	}
-	item, foundItems := c.FindLocalItem(Location{Id: c.Player.Id, Type: L_PLAYER}, itemName)
+	item, foundItems := c.FindLocalItem(Location{ID: c.Player.ID, Type: LocationPlayer}, itemName)
 	if foundItems != nil {
 		// Multiple items found
 		c.Printf("Which item did you mean?\n")
