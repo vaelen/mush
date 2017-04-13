@@ -94,10 +94,14 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "look",
-		Help: "Look around",
+		Help: "Look around. Usage: look [target]",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
-			c.Look()
+			target := ""
+			if len(e.Args) > 0 {
+				target = e.Args[0]
+			}
+			c.Look(target)
 		},
 	})
 
@@ -147,21 +151,25 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "create",
-		Help: "Creates a new room or item. Usage: create <room|item> <name>",
+		Help: "Creates a new room or item. Usage: create <room|item> <name> [description]",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if len(e.Args) > 1 {
 				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
 				n := e.Args[1]
+				d := ""
+				if len(e.Args) > 2 {
+					d = e.Args[2]
+				}
 				if t == "room" {
-					r := c.NewRoom(n)
+					r := c.NewRoom(n, d)
 					if r == nil {
 						c.Println("Couldn't Create Room")
 					} else {
 						c.Printf("New Room Created: %s\n", r.String())
 					}
 				} else if t == "item" {
-					i := c.NewItem(n)
+					i := c.NewItem(n, d)
 					if i == nil {
 						c.Println("Couldn't Create Item")
 					} else {
@@ -373,25 +381,60 @@ func (c *Connection) Emote(action string) {
 }
 
 // Look executes the "look" command for the given player.
-func (c *Connection) Look() {
+func (c *Connection) Look(target string) {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return
 	}
 	loc := c.Player.Location
-	s := ""
-	switch loc.Type {
-	case LocationRoom:
-		r := c.FindRoomByID(loc.ID)
-		if r == nil {
-			s = "You are lost.\n"
-		} else {
-			s = lookRoom(c, r)
+	if target == "" {
+		// Look at the current location
+		s := ""
+		switch loc.Type {
+		case LocationRoom:
+			r := c.FindRoomByID(loc.ID)
+			if r == nil {
+				s = "You are lost.\n"
+			} else {
+				s = lookRoom(c, r)
+			}
+		default:
+			// Not Yet Supported
+			s = "You don't know where you are.\n"
 		}
-	default:
-		// Not Yet Supported
-		s = "You don't know where you are.\n"
+		c.Printf(s)
+	} else {
+		// TODO: Add players
+		// Look at a given target
+		roomItem, foundRoomItems := c.FindLocalItem(loc, target)
+		playerItem, foundPlayerItems := c.FindLocalItem(Location{ID: c.Player.ID, Type: LocationPlayer}, target)
+
+		allItems := make([]*Item, 0)
+		if roomItem != nil {
+			allItems = append(allItems, roomItem)
+		}
+		if playerItem != nil {
+			allItems = append(allItems, playerItem)
+		}
+		if foundRoomItems != nil {
+			allItems = append(allItems, foundRoomItems...)
+		}
+		if foundPlayerItems != nil {
+			allItems = append(allItems, foundPlayerItems...)
+		}
+
+		if len(allItems) > 1 {
+			// Multiple items found
+			c.Printf("Which item did you mean?\n")
+			c.ListItems(allItems)
+		} else if len(allItems) == 1 {
+			// Single item found
+			c.Printf(lookItem(c, allItems[0]))
+		} else {
+			// No items found
+			c.Printf("That item is not here.\n")
+		}
+
 	}
-	c.Printf(s)
 }
 
 func lookRoom(c *Connection, r *Room) string {
@@ -419,6 +462,13 @@ func lookRoom(c *Connection, r *Room) string {
 	}
 	s += "\n"
 	return s
+}
+
+func lookItem(c *Connection, i *Item) string {
+	if c == nil || c.Player == nil || i == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s\n", i.Desc)
 }
 
 const (

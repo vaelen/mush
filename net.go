@@ -220,7 +220,7 @@ func connectionWorker(c *Connection) {
 	c.Shell.ShowPrompt(true)
 	c.Shell.SetPrompt(fmt.Sprintf("%s => ", c.Player.Name))
 	addCommands(c)
-	c.Look()
+	c.Look("")
 	c.Shell.Start()
 }
 
@@ -390,13 +390,15 @@ func (c *Connection) FindPlayerByName(name string) *Player {
 }
 
 // NewRoom is a helper method for creating a new room.
-func (c *Connection) NewRoom(name string) *Room {
+func (c *Connection) NewRoom(name string, description string) *Room {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
 	}
 	ack := make(chan *Room)
 	c.Server.World.NewRoom <- NewRoomMessage{Name: name, Owner: c.Player.ID, Ack: ack}
-	return <-ack
+	r := <-ack
+	r.Desc = description
+	return r
 }
 
 // FindRoomByID is a helper method that returns a room based on its ID.
@@ -436,13 +438,15 @@ func (c *Connection) DestroyRoom(id IDType) *Room {
 }
 
 // NewItem is a helper method that creates a new item.
-func (c *Connection) NewItem(name string) *Item {
+func (c *Connection) NewItem(name string, description string) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return nil
 	}
 	ack := make(chan *Item)
 	c.Server.World.NewItem <- NewItemMessage{Name: name, Owner: c.Player.ID, Ack: ack}
-	return <-ack
+	i := <-ack
+	i.Desc = description
+	return i
 }
 
 // FindItemByID is a helper method that finds an item based on its ID.
