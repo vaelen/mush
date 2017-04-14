@@ -20,8 +20,9 @@ along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
-	"github.com/vaelen/mush"
 	"os"
+
+	"github.com/vaelen/mush"
 )
 
 func main() {

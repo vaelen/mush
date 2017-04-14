@@ -87,22 +87,19 @@ func (r *Room) String() string {
 
 // Exit represents an exit between two rooms.
 type Exit struct {
-	ID          IDType
-	Name        string
-	Description string
-	Dest        Room
-	Owner       IDType
-	Hidden      bool
-	Lockable    bool
-	Locked      bool
-	Key         IDType
-	Attributes  map[string]string
-}
-
-func newExit() *Exit {
-	return &Exit{
-		Attributes: make(map[string]string),
-	}
+	ID              IDType
+	Name            string
+	Description     string
+	LongDescription string
+	Destination     IDType
+	ArriveMessage   string
+	LeaveMessage    string
+	Owner           IDType
+	Hidden          bool
+	Lockable        bool
+	Locked          bool
+	Key             IDType
+	Attributes      map[string]string
 }
 
 // Item represents an item in the world.
@@ -200,16 +197,45 @@ func NewWorld() *World {
 		Shutdown:       make(chan bool),
 	}
 
-	i := w.nextID()
 	r := &Room{
-		ID:          i,
+		ID:          w.nextID(),
 		Name:        "Main Lobby",
 		Description: "This is the main lobby.",
-		Owner:       1,
 		Attributes:  make(map[string]string),
 	}
 	w.db.Rooms[r.ID] = r
 	w.db.DefaultRoom = r.ID
+
+	r2 := &Room{
+		ID:          w.nextID(),
+		Name:        "Alcove",
+		Description: "This is the main lobby.",
+		Attributes:  make(map[string]string),
+	}
+
+	w.db.Rooms[r2.ID] = r2
+
+	r.Exits = append(r.Exits, Exit{
+		ID:              w.nextID(),
+		Name:            "down",
+		Description:     "Stairs spiral down from here to the cellar.",
+		LongDescription: "You can see the flicker of firelight coming up from below.",
+		Destination:     r2.ID,
+		ArriveMessage:   "%s comes down the stairs from the main lobby..",
+		LeaveMessage:    "%s heads down the stairs to the cellar.",
+		Attributes:      make(map[string]string),
+	})
+
+	r2.Exits = append(r2.Exits, Exit{
+		ID:              w.nextID(),
+		Name:            "up",
+		Description:     "Stairs spiral up from here to the main lobby.",
+		LongDescription: "You can see light shining down from above and you hear the sound of people talking.",
+		Destination:     r.ID,
+		ArriveMessage:   "%s comes up the stairs from the cellar.",
+		LeaveMessage:    "%s heads up the stairs to the main lobby.",
+		Attributes:      make(map[string]string),
+	})
 
 	return w
 }
@@ -481,7 +507,8 @@ func (w *World) saveState() error {
 	if err != nil {
 		log.Printf("WARNING: Could not link %s to %s: %s\n", fn, mainFn, err.Error())
 	}
-	log.Printf("State Saved: %+v", w)
+	// log.Printf("State Saved: %+v", w)
+	log.Printf("State Saved\n")
 	return nil
 }
 
@@ -502,6 +529,7 @@ func LoadWorld() (*World, error) {
 		log.Printf("ERROR: Could not load world state: %s\n", err.Error())
 		return nil, err
 	}
-	log.Printf("State Loaded: %+v", w)
+	// log.Printf("State Loaded: %+v", w)
+	log.Printf("State Loaded\n")
 	return w, nil
 }

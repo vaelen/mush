@@ -23,13 +23,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/abiosoft/ishell"
-	"gopkg.in/readline.v1"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/abiosoft/ishell"
+	"gopkg.in/readline.v1"
 )
 
 // VersionName is the name of the server.
@@ -174,15 +175,28 @@ func (c *Connection) Log(format string, a ...interface{}) {
 
 // Printf writes text to the given connection.
 func (c *Connection) Printf(format string, a ...interface{}) {
+	// TODO: Replace this with a channel message.
 	if c.Shell != nil {
 		c.Shell.Printf(format, a...)
 	}
 }
 
-// Println writes text to the given connection.
-func (c *Connection) Println(a ...interface{}) {
-	if c.Shell != nil {
-		c.Shell.Println(a...)
+// Println writes text to the given connection, followed by a new line character.
+func (c *Connection) Println(message string) {
+	if c != nil {
+		c.Printf(message + "\n")
+	}
+}
+
+// LocationPrintf sends text to all of the players in a given location.
+func (c *Connection) LocationPrintf(loc *Location, fmt string, a ...interface{}) {
+	if c == nil || c.Shell == nil {
+		return
+	}
+	for _, conn := range c.Server.Connections() {
+		if conn.InLocation(loc) {
+			conn.Printf(fmt, a...)
+		}
 	}
 }
 
@@ -199,7 +213,7 @@ func (c *Connection) Close() {
 	defer c.C.Close()
 	c.Log("Connection closed")
 	if c.Authenticated && c.Player != nil {
-		c.Server.Wall("%s disapears in a puff of smoke.\n", c.Player.Name)
+		c.LocationPrintf(&c.Player.Location, "%s disapears in a puff of smoke.\n", c.Player.Name)
 	}
 	ack := make(chan bool)
 	c.Server.cm.Closed <- ConnectionStateChange{c: c, ack: ack}
@@ -220,7 +234,7 @@ func connectionWorker(c *Connection) {
 	} else {
 		c.Printf("Welcome Back, %s!\n", c.Player.Name)
 	}
-	c.Server.Wall("%s has appeared.\n", c.Player.Name)
+	c.LocationPrintf(&c.Player.Location, "%s has appeared.\n", c.Player.Name)
 	c.Shell.ShowPrompt(true)
 	c.Shell.SetPrompt(fmt.Sprintf("%s => ", c.Player.Name))
 	addCommands(c)
@@ -391,6 +405,18 @@ func (c *Connection) FindPlayerByName(name string) *Player {
 		return nil
 	}
 	return players[0]
+}
+
+// FindOnlinePlayersByLocation is a helper method that returns a slice of players who are online and in the given location.
+// Passing in nil will return all players who are currently online.
+func (c *Connection) FindOnlinePlayersByLocation(loc *Location) []*Player {
+	players := make([]*Player, 0)
+	for _, conn := range c.Server.Connections() {
+		if conn.InLocation(loc) {
+			players = append(players, conn.Player)
+		}
+	}
+	return players
 }
 
 // NewRoom is a helper method for creating a new room.

@@ -21,9 +21,10 @@ package mush
 
 import (
 	"fmt"
-	"github.com/abiosoft/ishell"
 	"strings"
 	"time"
+
+	"github.com/abiosoft/ishell"
 )
 
 func addCommands(c *Connection) {
@@ -292,6 +293,19 @@ func addCommands(c *Connection) {
 		},
 	})
 
+	shell.AddCmd(&ishell.Cmd{
+		Name: "go",
+		Help: "Go somewhere.  Usage: go <direction>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				c.Go(e.Args[0])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
 }
 
 // IsAdmin returns true if the player is an admin.
@@ -390,11 +404,7 @@ func (c *Connection) Whisper(target string, phrase string, loc *Location) {
 // Emote executes the "emote" command for the given player.
 // It can also be used by other commands to say that the player did something.
 func (c *Connection) Emote(action string, loc *Location) {
-	for _, conn := range c.Server.Connections() {
-		if conn.InLocation(loc) {
-			conn.Printf("%s %s.\n", c.Player.Name, action)
-		}
-	}
+	c.LocationPrintf(loc, "%s %s.\n", c.Player.Name, action)
 }
 
 // Look executes the "look" command for the given player.
@@ -459,24 +469,30 @@ func lookRoom(c *Connection, r *Room) string {
 		return ""
 	}
 	p := c.Player
-	playersHere := make([]string, 0)
-	for _, conn := range c.Server.Connections() {
-		p2 := conn.Player
-		if conn.Authenticated && p2 != nil && p2.ID != p.ID {
-			if p2.Location.Type == LocationRoom && p2.Location.ID == r.ID {
-				playersHere = append(playersHere, p.Name)
-			}
-		}
-	}
-	itemsHere := c.FindItemsByLocation(c.Player.Location)
+
+	loc := Location{ID: r.ID, Type: LocationRoom}
+
 	s := r.String() + "\n"
 	s += r.Description + "\n"
-	for _, item := range itemsHere {
-		s += fmt.Sprintf("You see %s here.\n", item.Name)
+	// Exits
+	for _, exit := range r.Exits {
+		s += fmt.Sprintf("%s [%s]\n", exit.Description, exit.Name)
 	}
-	for _, pName := range playersHere {
-		s += fmt.Sprintf("You see %s here.\n", pName)
+
+	// Items
+	for _, item := range c.FindItemsByLocation(loc) {
+		if item != nil {
+			s += fmt.Sprintf("You see %s here.\n", item.Name)
+		}
 	}
+
+	// Players
+	for _, player := range c.FindOnlinePlayersByLocation(&loc) {
+		if player != nil && p.ID != player.ID {
+			s += fmt.Sprintf("You see %s here.\n", player.Name)
+		}
+	}
+
 	s += "\n"
 	return s
 }
@@ -579,4 +595,46 @@ func (c *Connection) Drop(itemName string) {
 		// No items found
 		c.Printf("You don't have that item.\n")
 	}
+}
+
+// Go executes the "go" command and moves a player to another room.
+func (c *Connection) Go(target string) {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+	t := strings.TrimSpace(strings.ToLower(target))
+	switch c.Player.Location.Type {
+	case LocationRoom:
+		r := c.FindRoomByID(c.Player.Location.ID)
+		if r == nil {
+			c.Printf("You're Lost!\n")
+			return
+		}
+		for _, e := range r.Exits {
+			if strings.ToLower(e.Name) == t {
+				dest := c.FindRoomByID(e.Destination)
+				if dest == nil {
+					c.Printf("That doesn't seem to go anywhere.\n")
+				}
+				// TODO: Handle locks here!
+				c.Move(Location{ID: dest.ID, Type: LocationRoom}, e.LeaveMessage, e.ArriveMessage)
+			}
+		}
+	default:
+		c.Printf("You're not in a room!\n")
+		return
+	}
+}
+
+// Move transports a player to another location.
+// leaveMessage should contain "%s" for the player's name.
+// arriveMessage should contain "%s" for the player's name.
+func (c *Connection) Move(destination Location, leaveMessage string, arriveMessage string) {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+	c.LocationPrintf(&c.Player.Location, leaveMessage + "\n", c.Player.Name)
+	c.Player.Location = destination
+	c.Look("")
+	c.LocationPrintf(&destination, arriveMessage + "\n", c.Player.Name)
 }
