@@ -43,6 +43,9 @@ func addCommands(c *Connection) {
 		Name: "say",
 		Help: "Say something to the everybody else. Usage: say [player] <message>",
 		Func: func(e *ishell.Context) {
+			if c.Player == nil {
+				return
+			}
 			if len(e.Args) > 0 {
 				var target string
 				var phrase string
@@ -54,7 +57,7 @@ func addCommands(c *Connection) {
 					phrase = e.Args[0]
 				}
 				c.Log("Executing Say: %s - %s", target, phrase)
-				c.Say(target, phrase)
+				c.Say(target, phrase, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())
 			}
@@ -65,12 +68,15 @@ func addCommands(c *Connection) {
 		Name: "whisper",
 		Help: "Whisper something to the somebody else. Usage: whisper <player> <message>",
 		Func: func(e *ishell.Context) {
+			if c.Player == nil {
+				return
+			}
 			if len(e.Args) > 1 {
 				c.updateIdleTime()
 				target := e.Args[0]
 				phrase := e.Args[1]
 				c.Log("Executing Whisper: %s - %s", target, phrase)
-				c.Whisper(target, phrase)
+				c.Whisper(target, phrase, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())
 			}
@@ -81,11 +87,14 @@ func addCommands(c *Connection) {
 		Name: "emote",
 		Help: "Do something. Usage: emote <action>",
 		Func: func(e *ishell.Context) {
+			if c.Player == nil {
+				return
+			}
 			if len(e.Args) > 0 {
 				c.updateIdleTime()
 				action := e.Args[0]
 				c.Log("Executing Emote: %s", action)
-				c.Emote(action)
+				c.Emote(action, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())
 			}
@@ -294,7 +303,7 @@ func (c *Connection) updateIdleTime() {
 	c.LastActed = time.Now()
 }
 
-func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType, targetName string) {
+func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType, targetName string, loc Location) {
 	t := strings.ToLower(target)
 	for _, conn := range c.Server.Connections() {
 		if conn.Authenticated && conn.Player != nil {
@@ -302,6 +311,7 @@ func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType,
 			if t == n {
 				targetID = conn.ID
 				targetName = conn.Player.Name
+				loc = conn.Player.Location
 				break
 			}
 		}
@@ -310,12 +320,17 @@ func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType,
 }
 
 // Say executes the "say" command for the given player.
-func (c *Connection) Say(target string, phrase string) {
-	targetID, targetName := c.findPlayerConnectionByName(target)
+func (c *Connection) Say(target string, phrase string, loc *Location) {
+	targetID, targetName, targetLoc := c.findPlayerConnectionByName(target)
 
 	if target != "" {
 		if targetName == "" {
 			c.Printf("Couldn't find player %s\n", target)
+			return
+		}
+
+		if loc != nil && *loc != targetLoc {
+			c.Printf("That player is not here.\n")
 			return
 		}
 	}
@@ -329,9 +344,9 @@ func (c *Connection) Say(target string, phrase string) {
 			// Do Nothing
 		case conn.ID == targetID && target != "":
 			conn.Printf("%s says \"%s\" to you.\n", c.Player.Name, phrase)
-		case target == "":
+		case target == "" && conn.InLocation(loc):
 			conn.Printf("%s says \"%s\".\n", c.Player.Name, phrase)
-		default:
+		case conn.InLocation(loc):
 			conn.Printf("%s says \"%s\" to %s.\n", c.Player.Name, phrase, targetName)
 		}
 	}
@@ -344,11 +359,16 @@ func (c *Connection) Say(target string, phrase string) {
 }
 
 // Whisper executes the "whisper" command for the given player.
-func (c *Connection) Whisper(target string, phrase string) {
-	targetID, targetName := c.findPlayerConnectionByName(target)
+func (c *Connection) Whisper(target string, phrase string, loc *Location) {
+	targetID, targetName, targetLoc := c.findPlayerConnectionByName(target)
 
 	if targetName == "" {
 		c.Printf("Couldn't find player %s\n", target)
+		return
+	}
+
+	if loc != nil && *loc != targetLoc {
+		c.Printf("That player is not here.\n")
 		return
 	}
 
@@ -360,7 +380,7 @@ func (c *Connection) Whisper(target string, phrase string) {
 			// Do Nothing
 		case conn.ID == targetID:
 			conn.Printf("%s whispers \"%s\".\n", c.Player.Name, phrase)
-		default:
+		case conn.InLocation(loc):
 			conn.Printf("%s whispers to %s.\n", c.Player.Name, targetName)
 		}
 	}
@@ -369,12 +389,9 @@ func (c *Connection) Whisper(target string, phrase string) {
 
 // Emote executes the "emote" command for the given player.
 // It can also be used by other commands to say that the player did something.
-func (c *Connection) Emote(action string) {
+func (c *Connection) Emote(action string, loc *Location) {
 	for _, conn := range c.Server.Connections() {
-		switch {
-		case !conn.Authenticated:
-			// Do Nothing
-		default:
+		if conn.InLocation(loc) {
 			conn.Printf("%s %s.\n", c.Player.Name, action)
 		}
 	}
@@ -537,7 +554,7 @@ func (c *Connection) Take(itemName string) {
 	} else if item != nil {
 		// Single item found
 		item.Location = Location{ID: c.Player.ID, Type: LocationPlayer}
-		c.Emote(fmt.Sprintf("picks up %s", item.Name))
+		c.Emote(fmt.Sprintf("picks up %s", item.Name), &c.Player.Location)
 	} else {
 		// No items found
 		c.Printf("That item is not here.\n")
@@ -557,7 +574,7 @@ func (c *Connection) Drop(itemName string) {
 	} else if item != nil {
 		// Single item found
 		item.Location = c.Player.Location
-		c.Emote(fmt.Sprintf("drops %s", item.Name))
+		c.Emote(fmt.Sprintf("drops %s", item.Name), &c.Player.Location)
 	} else {
 		// No items found
 		c.Printf("You don't have that item.\n")

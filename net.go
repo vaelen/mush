@@ -429,7 +429,7 @@ func (c *Connection) DestroyRoom(id IDType) *Room {
 		return nil
 	}
 	r := c.FindRoomByID(id)
-	if r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
+	if !c.CanDestroyRoom(r) {
 		// Can't Destroy
 		return nil
 	}
@@ -518,7 +518,7 @@ func (c *Connection) DestroyItem(id IDType) *Item {
 		return nil
 	}
 	i := c.FindItemByID(id)
-	if i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
+	if !c.CanDestroyItem(i) {
 		// Can't Destroy
 		return nil
 	}
@@ -528,4 +528,52 @@ func (c *Connection) DestroyItem(id IDType) *Item {
 	<-ack
 
 	return i
+}
+
+// CanEditItem returns true of the player can edit the field on the object.
+func (c *Connection) CanEditItem(i *Item, field string) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
+		return false
+	}
+	return true
+}
+
+// CanDestroyItem returns true of the player can destroy the item.
+func (c *Connection) CanDestroyItem(i *Item) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
+		return false
+	}
+	return true
+}
+
+// CanEditRoom returns true if the player can edit the field on the room.
+func (c *Connection) CanEditRoom(r *Room, field string) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
+		return false
+	}
+	return true
+}
+
+// CanDestroyRoom returns true if the player can destroy the room.
+func (c *Connection) CanDestroyRoom(r *Room) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
+		return false
+	}
+	return true
+}
+
+// InLocation returns true if the user is logged in and in the given location.
+// Passing in a nil Location reference will return true as long as the user is authenticated.
+func (c *Connection) InLocation(loc *Location) bool {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return false
+	}
+	if loc == nil || *loc == c.Player.Location {
+		return true
+	}
+	return false
 }
