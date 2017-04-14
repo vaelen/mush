@@ -34,12 +34,16 @@ import (
 
 // VersionName is the name of the server.
 const VersionName = "Vaelen/MUSH Server"
+
 // VersionMajor is the major release of the server.
 const VersionMajor = 0
+
 // VersionMinor is the minor release of the server.
 const VersionMinor = 0
+
 // VersionPatch is the patch release of the server.
 const VersionPatch = 1
+
 // VersionExtra contains additional version information about the server.
 const VersionExtra = ""
 
@@ -397,7 +401,7 @@ func (c *Connection) NewRoom(name string, description string) *Room {
 	ack := make(chan *Room)
 	c.Server.World.NewRoom <- NewRoomMessage{Name: name, Owner: c.Player.ID, Ack: ack}
 	r := <-ack
-	r.Desc = description
+	r.Description = description
 	return r
 }
 
@@ -445,7 +449,7 @@ func (c *Connection) NewItem(name string, description string) *Item {
 	ack := make(chan *Item)
 	c.Server.World.NewItem <- NewItemMessage{Name: name, Owner: c.Player.ID, Ack: ack}
 	i := <-ack
-	i.Desc = description
+	i.Description = description
 	return i
 }
 
@@ -483,7 +487,7 @@ func (c *Connection) FindLocalItem(loc Location, nameOrID string) (*Item, []*Ite
 	var foundItems []*Item
 	n := strings.TrimSpace(strings.ToLower(nameOrID))
 	id, err := ParseID(n)
-	if err != nil && id > 0 {
+	if err == nil && id > 0 {
 		// Look up by id
 		i := c.FindItemByID(id)
 		if i != nil && i.Location == loc {

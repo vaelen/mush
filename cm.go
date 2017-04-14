@@ -30,11 +30,11 @@ type ConnectionManager struct {
 	connMutex        sync.RWMutex
 	nextConnectionID IDType
 	// Opened: Sending a ConnectionStateChange message to this channel adds the connection to the ConnectionManager.
-	Opened           chan ConnectionStateChange
+	Opened chan ConnectionStateChange
 	// Closed: Sending a ConnectionStateChange message to this channel removes the connection from the ConnectionManager.
-	Closed           chan ConnectionStateChange
+	Closed chan ConnectionStateChange
 	// Shutdown: Sending true to this channel shuts down the ConnectionManager.
-	Shutdown         chan bool
+	Shutdown chan bool
 }
 
 // ConnectionStateChange is an event that is fired when a connection changes state.
@@ -45,7 +45,7 @@ type ConnectionStateChange struct {
 
 // NewConnectionManager creates a new ConnectionManager instance.
 func NewConnectionManager() *ConnectionManager {
-	return  &ConnectionManager{
+	return &ConnectionManager{
 		nextConnectionID: 1,
 		connections:      make([]*Connection, 0),
 		Opened:           make(chan ConnectionStateChange),
@@ -53,7 +53,6 @@ func NewConnectionManager() *ConnectionManager {
 		Shutdown:         make(chan bool),
 	}
 }
-
 
 // Connections returns a slice of the currently open connections.
 func (m *ConnectionManager) Connections() []*Connection {

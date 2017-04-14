@@ -453,7 +453,7 @@ func lookRoom(c *Connection, r *Room) string {
 	}
 	itemsHere := c.FindItemsByLocation(c.Player.Location)
 	s := r.String() + "\n"
-	s += r.Desc + "\n"
+	s += r.Description + "\n"
 	for _, item := range itemsHere {
 		s += fmt.Sprintf("You see %s here.\n", item.Name)
 	}
@@ -468,7 +468,7 @@ func lookItem(c *Connection, i *Item) string {
 	if c == nil || c.Player == nil || i == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s\n", i.Desc)
+	return fmt.Sprintf("%s\n", i.Description)
 }
 
 const (
@@ -509,7 +509,7 @@ func (c *Connection) ListRooms(rooms []*Room) {
 	s := fmt.Sprintf("%10s %30s\n", "ID", "Room Name")
 	s += fmt.Sprintf("%10s %30s\n", h10, h30)
 	for _, r := range rooms {
-		s += fmt.Sprintf("%10d %30s\n", r.ID, r.Name)
+		s += fmt.Sprintf("%10s %30s\n", r.ID, r.Name)
 	}
 	c.Println(s)
 }
@@ -519,7 +519,7 @@ func (c *Connection) ListItems(items []*Item) {
 	s := fmt.Sprintf("%10s %30s %30s\n", "ID", "Item Name", "Location")
 	s += fmt.Sprintf("%10s %30s %30s\n", h10, h30, h30)
 	for _, i := range items {
-		s += fmt.Sprintf("%10d %30s %30s\n", i.ID, i.Name, c.LocationName(i.Location))
+		s += fmt.Sprintf("%10s %30s %30s\n", i.ID, i.Name, c.LocationName(i.Location))
 	}
 	c.Println(s)
 }

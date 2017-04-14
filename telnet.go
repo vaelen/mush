@@ -32,21 +32,21 @@ type TelnetInterceptor struct {
 }
 
 const (
-	escapeSe   byte = 240
+	escapeSe    byte = 240
 	escapeNoOp  byte = 241
-	escapeData byte = 242
-	escapeBreak  byte = 243
-	escapeIP   byte = 244
-	escapeAyt  byte = 245
-	escapeEc   byte = 247
-	escapeEl   byte = 248
-	escapeGa   byte = 249
-	escapeSb   byte = 250
-	escapeWill byte = 251
-	escapeWont byte = 252
-	escapeDo   byte = 253
-	escapeDoNT byte = 254
-	escapeIac  byte = 255
+	escapeData  byte = 242
+	escapeBreak byte = 243
+	escapeIP    byte = 244
+	escapeAyt   byte = 245
+	escapeEc    byte = 247
+	escapeEl    byte = 248
+	escapeGa    byte = 249
+	escapeSb    byte = 250
+	escapeWill  byte = 251
+	escapeWont  byte = 252
+	escapeDo    byte = 253
+	escapeDoNT  byte = 254
+	escapeIac   byte = 255
 )
 
 func (t TelnetInterceptor) Read(p []byte) (n int, err error) {

@@ -31,16 +31,24 @@ import (
 )
 
 // SaveStateFrequency represents how often the game's state should be saved.
-const SaveStateFrequency time.Duration = time.Minute * 30
+const SaveStateFrequency time.Duration = time.Hour
 
 // IDType is the type used for all ID values
 type IDType uint64
 
+func (id IDType) String() string {
+	return fmt.Sprintf("@%d", id)
+}
+
 // ParseID parses a string to an IDType
 func ParseID(s string) (IDType, error) {
-	i, err := strconv.ParseUint(s, 10, 64)
+	s = strings.TrimSpace(s)
+	if len(s) < 2 || s[0] != '@' {
+		return 0, fmt.Errorf("ID not formatted properly: %s", s)
+	}
+	i, err := strconv.ParseUint(s[1:], 10, 64)
 	if err != nil {
-		return 0, errors.New("Couldn't parse id: " + s)
+		return 0, errors.New("Couldn't parse ID: " + s)
 	}
 	return IDType(i), nil
 }
@@ -57,61 +65,61 @@ func (p *Player) String() string {
 	if p == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [P: %d]", p.Name, p.ID)
+	return fmt.Sprintf("%s [%s]", p.Name, p.ID)
 }
 
 // Room represents a room in the world.
 type Room struct {
-	ID    IDType
-	Name  string
-	Desc  string
-	Exits []Exit
-	Owner IDType
-	Attr  map[string]string
+	ID          IDType
+	Name        string
+	Description string
+	Exits       []Exit
+	Owner       IDType
+	Attributes  map[string]string
 }
 
 func (r *Room) String() string {
 	if r == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [R: %d]", r.Name, r.ID)
+	return fmt.Sprintf("%s [%s]", r.Name, r.ID)
 }
 
 // Exit represents an exit between two rooms.
 type Exit struct {
-	ID       IDType
-	Name     string
-	Desc     string
-	Dest     Room
-	Owner    IDType
-	Hidden   bool
-	Lockable bool
-	Locked   bool
-	Key      IDType
-	Attr     map[string]string
+	ID          IDType
+	Name        string
+	Description string
+	Dest        Room
+	Owner       IDType
+	Hidden      bool
+	Lockable    bool
+	Locked      bool
+	Key         IDType
+	Attributes  map[string]string
 }
 
 func newExit() *Exit {
 	return &Exit{
-		Attr: make(map[string]string),
+		Attributes: make(map[string]string),
 	}
 }
 
 // Item represents an item in the world.
 type Item struct {
-	ID       IDType
-	Name     string
-	Desc     string
-	Owner    IDType
-	Location Location
-	Attr     map[string]string
+	ID          IDType
+	Name        string
+	Description string
+	Owner       IDType
+	Location    Location
+	Attributes  map[string]string
 }
 
 func (i *Item) String() string {
 	if i == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s [I: %d]", i.Name, i.ID)
+	return fmt.Sprintf("%s [%s]", i.Name, i.ID)
 }
 
 // LocationType is used to represent the type of a Location.
@@ -135,9 +143,7 @@ type Location struct {
 // WorldDatabase holds all of the players, rooms, and items in the world.
 type WorldDatabase struct {
 	// Data
-	PlayerID    IDType
-	RoomID      IDType
-	ItemID      IDType
+	NextID      IDType
 	DefaultRoom IDType
 	Players     map[IDType]*Player
 	Rooms       map[IDType]*Room
@@ -171,9 +177,7 @@ type World struct {
 func NewWorld() *World {
 	w := &World{
 		db: WorldDatabase{
-			PlayerID:    1,
-			RoomID:      1,
-			ItemID:      1,
+			NextID:      1,
 			DefaultRoom: 1,
 			Rooms:       make(map[IDType]*Room),
 			Players:     make(map[IDType]*Player),
@@ -196,19 +200,24 @@ func NewWorld() *World {
 		Shutdown:       make(chan bool),
 	}
 
-	i := w.db.RoomID
-	w.db.RoomID++
+	i := w.nextID()
 	r := &Room{
-		ID:    i,
-		Name:  "Main Lobby",
-		Desc:  "This is the main lobby.",
-		Owner: 1,
-		Attr: make(map[string]string),
+		ID:          i,
+		Name:        "Main Lobby",
+		Description: "This is the main lobby.",
+		Owner:       1,
+		Attributes:  make(map[string]string),
 	}
 	w.db.Rooms[r.ID] = r
 	w.db.DefaultRoom = r.ID
 
 	return w
+}
+
+func (w *World) nextID() IDType {
+	i := w.db.NextID
+	w.db.NextID++
+	return i
 }
 
 // FindPlayerMessage is sent to FindPlayer to find a set of players.
@@ -304,8 +313,7 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewPlayer:
 				log.Printf("New Player: %s\n", e.Name)
-				id := w.db.PlayerID
-				w.db.PlayerID++
+				id := w.nextID()
 				p := &Player{
 					ID:   id,
 					Name: e.Name,
@@ -314,7 +322,7 @@ func (w *World) WorldThread() func() {
 						Type: LocationRoom,
 					},
 				}
-				if p.ID == 1 {
+				if len(w.db.Players) == 0 {
 					p.Admin = true
 				}
 				w.db.Players[p.ID] = p
@@ -339,13 +347,12 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewRoom:
 				log.Printf("New Room: %s\n", e.Name)
-				id := w.db.RoomID
-				w.db.RoomID++
+				id := w.nextID()
 				r := &Room{
-					ID:    id,
-					Name:  e.Name,
-					Owner: e.Owner,
-					Attr: make(map[string]string),
+					ID:         id,
+					Name:       e.Name,
+					Owner:      e.Owner,
+					Attributes: make(map[string]string),
 				}
 				w.db.Rooms[r.ID] = r
 				e.Ack <- r
@@ -371,8 +378,7 @@ func (w *World) WorldThread() func() {
 				e.Ack <- r
 			case e := <-w.NewItem:
 				log.Printf("New Item: %s\n", e.Name)
-				id := w.db.ItemID
-				w.db.ItemID++
+				id := w.nextID()
 				i := &Item{
 					ID:    id,
 					Name:  e.Name,
@@ -381,7 +387,7 @@ func (w *World) WorldThread() func() {
 						ID:   e.Owner,
 						Type: LocationPlayer,
 					},
-					Attr: make(map[string]string),
+					Attributes: make(map[string]string),
 				}
 				w.db.Items[i.ID] = i
 				e.Ack <- i
