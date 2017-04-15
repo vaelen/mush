@@ -633,8 +633,8 @@ func (c *Connection) Move(destination Location, leaveMessage string, arriveMessa
 	if c == nil || !c.Authenticated || c.Player == nil {
 		return
 	}
-	c.LocationPrintf(&c.Player.Location, leaveMessage + "\n", c.Player.Name)
+	c.LocationPrintf(&c.Player.Location, leaveMessage+"\n", c.Player.Name)
 	c.Player.Location = destination
 	c.Look("")
-	c.LocationPrintf(&destination, arriveMessage + "\n", c.Player.Name)
+	c.LocationPrintf(&destination, arriveMessage+"\n", c.Player.Name)
 }

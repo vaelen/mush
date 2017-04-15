@@ -20,6 +20,7 @@ along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 package mush
 
 import (
+	"crypto/sha512"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -137,6 +138,9 @@ type Location struct {
 	Type LocationType
 }
 
+// PasswordHash stores a password hash
+type PasswordHash [sha512.Size]byte
+
 // WorldDatabase holds all of the players, rooms, and items in the world.
 type WorldDatabase struct {
 	// Data
@@ -145,6 +149,7 @@ type WorldDatabase struct {
 	Players     map[IDType]*Player
 	Rooms       map[IDType]*Room
 	Items       map[IDType]*Item
+	Auth        map[IDType]PasswordHash
 }
 
 // World contains a WorldDatabase and all of the channels needed to modify it.
@@ -168,6 +173,9 @@ type World struct {
 
 	SaveWorldState chan SaveWorldStateMessage
 	Shutdown       chan bool
+
+	CheckPassword chan PasswordMessage
+	SetPassword   chan PasswordMessage
 }
 
 // NewWorld creates a new World instance
@@ -179,6 +187,7 @@ func NewWorld() *World {
 			Rooms:       make(map[IDType]*Room),
 			Players:     make(map[IDType]*Player),
 			Items:       make(map[IDType]*Item),
+			Auth:        make(map[IDType]PasswordHash),
 		},
 
 		FindPlayer:    make(chan FindPlayerMessage),
@@ -195,6 +204,9 @@ func NewWorld() *World {
 
 		SaveWorldState: make(chan SaveWorldStateMessage),
 		Shutdown:       make(chan bool),
+
+		CheckPassword: make(chan PasswordMessage),
+		SetPassword:   make(chan PasswordMessage),
 	}
 
 	r := &Room{
@@ -208,8 +220,8 @@ func NewWorld() *World {
 
 	r2 := &Room{
 		ID:          w.nextID(),
-		Name:        "Alcove",
-		Description: "This is the main lobby.",
+		Name:        "Cellar",
+		Description: "You are in a celler underneath the main lobby.\nTorches on the walls provide light.",
 		Attributes:  make(map[string]string),
 	}
 
@@ -311,6 +323,14 @@ type DestroyItemMessage struct {
 // SaveWorldStateMessage is sent to SaveWorldState to save the world's current state to disk.
 type SaveWorldStateMessage struct {
 	Ack chan error
+}
+
+// PasswordMessage is sent to CheckPassword to check a password
+// and SetPassword to set a password.
+type PasswordMessage struct {
+	ID       IDType
+	Password string
+	Ack      chan bool
 }
 
 // WorldThread returns a goroutine that handles World events.
@@ -427,9 +447,22 @@ func (w *World) WorldThread() func() {
 				w.saveState()
 			case <-w.Shutdown:
 				return
+			case e := <-w.CheckPassword:
+				h, ok := w.db.Auth[e.ID]
+				if ok && h == hashPassword(e.Password) {
+					e.Ack <- true
+				}
+				e.Ack <- false
+			case e := <-w.SetPassword:
+				w.db.Auth[e.ID] = hashPassword(e.Password)
+				e.Ack <- true
 			}
 		}
 	}
+}
+
+func hashPassword(pw string) PasswordHash {
+	return sha512.Sum512([]byte(pw))
 }
 
 func (w *World) findPlayerByName(name string) *Player {

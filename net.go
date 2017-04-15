@@ -57,9 +57,6 @@ func VersionString() string {
 	return s
 }
 
-// AuthenticationEnabled determines whether or not authentication is enabled on the server.
-const AuthenticationEnabled = false
-
 // Connection represents a connection to the server.
 type Connection struct {
 	ID            IDType
@@ -298,7 +295,6 @@ func writeBytes(c io.Writer, b []byte) {
 func Login(c *Connection) (bool, error) {
 	r := bufio.NewReader(TelnetInterceptor{i: c.C, o: c.C})
 	w := bufio.NewWriter(c.C)
-	buf := make([]byte, 0, 4096)
 
 	fmt.Fprintf(w, "Connected to %s\n\n", VersionString())
 
@@ -321,34 +317,55 @@ func Login(c *Connection) (bool, error) {
 	if isNew {
 		log.Println("New Player")
 		// New Player
+		var pw string
+		fmt.Fprintf(w, "Welcome new player!\n")
+		fmt.Fprintf(w, "When choosing a password, please don't use one you normally use elsewhere.\n")
+		w.Flush()
+		for {
+			pw, err := readPassword("Choose Password => ", r, w)
+			if err != nil {
+				return false, err
+			}
+			fmt.Fprintf(w, "\n")
+			pv, err := readPassword("Retype Password => ", r, w)
+			if err != nil {
+				return false, err
+			}
+			fmt.Fprintf(w, "\n")
+			if pw == pv {
+				break
+			} else {
+				_, err = fmt.Fprintf(w, "Passwords didn't match, please try again.\n")
+				if err != nil {
+					return false, err
+				}
+			}
+		}
 		ack := make(chan *Player)
 		c.Server.World.NewPlayer <- NewPlayerMessage{
 			Name: playerName,
 			Ack:  ack,
 		}
 		p = <-ack
+		c.setPassword(p.ID, pw)
 	} else {
 		p = players[0]
-		if AuthenticationEnabled {
-			fmt.Fprintf(w, "Password => ")
-			DisableEcho(w)
-			w.Flush()
-			// Read any pending bytes
-			r.Read(buf)
-
-			p, err := r.ReadString('\n')
+		i := 0
+		for {
+			i++
+			pw, err := readPassword("Password => ", r, w)
 			if err != nil {
-				c.Log("ERROR: %s", err.Error())
 				return false, err
 			}
-			p = strings.TrimSpace(p)
-			c.Log("Password: %s", p)
-			// TODO: Authenticate
-
-			EnableEcho(w)
-			w.Flush()
-			// Read any pending bytes
-			r.Read(buf)
+			fmt.Fprintf(w, "\n")
+			if c.checkPassword(p.ID, pw) {
+				break
+			} else if i >= 3 {
+				fmt.Fprintf(w, "Authentication failed.\n")
+				w.Flush()
+				c.C.Close()
+				return false, fmt.Errorf("Authentication Failed: %s", p.Name)
+			}
 		}
 	}
 	if p == nil {
@@ -358,6 +375,27 @@ func Login(c *Connection) (bool, error) {
 	c.Authenticated = true
 	c.Log("Logged In Successfully")
 	return isNew, nil
+}
+
+func readPassword(prompt string, r *bufio.Reader, w *bufio.Writer) (string, error) {
+	buf := make([]byte, 0, 4096)
+	fmt.Fprintf(w, prompt)
+	DisableEcho(w)
+	w.Flush()
+	// Read any pending bytes
+	r.Read(buf)
+
+	p, err := r.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	p = strings.TrimSpace(p)
+
+	EnableEcho(w)
+	w.Flush()
+	// Read any pending bytes
+	r.Read(buf)
+	return p, nil
 }
 
 // Helper Methods
@@ -602,4 +640,16 @@ func (c *Connection) InLocation(loc *Location) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Connection) checkPassword(id IDType, pw string) bool {
+	ack := make(chan bool)
+	c.Server.World.CheckPassword <- PasswordMessage{ID: id, Password: pw, Ack: ack}
+	return <-ack
+}
+
+func (c *Connection) setPassword(id IDType, pw string) bool {
+	ack := make(chan bool)
+	c.Server.World.SetPassword <- PasswordMessage{ID: id, Password: pw, Ack: ack}
+	return <-ack
 }
