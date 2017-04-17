@@ -27,9 +27,13 @@ import (
 
 func main() {
 	addr := ":2222"
+	tlsAddr := ":2223"
 	if len(os.Args) > 1 {
 		addr = os.Args[1]
 	}
+	if len(os.Args) > 2 {
+		tlsAddr = os.Args[2]
+	}
 	s := mush.NewServer()
-	s.StartServer(addr)
+	s.StartServer(addr, tlsAddr)
 }

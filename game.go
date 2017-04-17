@@ -20,12 +20,13 @@ along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 package mush
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -139,7 +140,7 @@ type Location struct {
 }
 
 // PasswordHash stores a password hash
-type PasswordHash [sha512.Size]byte
+type PasswordHash [sha256.Size]byte
 
 // WorldDatabase holds all of the players, rooms, and items in the world.
 type WorldDatabase struct {
@@ -448,12 +449,21 @@ func (w *World) WorldThread() func() {
 			case <-w.Shutdown:
 				return
 			case e := <-w.CheckPassword:
+				// log.Printf("CheckPassword - ID: %s, Password: %s\n", e.ID, e.Password)
 				h, ok := w.db.Auth[e.ID]
-				if ok && h == hashPassword(e.Password) {
-					e.Ack <- true
+				h2 := hashPassword(e.Password)
+				r := false
+				if ok {
+					// log.Printf("ID: %s, Stored Hash: %v, Hash: %v\n", e.ID, h, h2)
+					if h == h2 {
+						r = true
+					}
+				} else {
+					log.Printf("ID: %s, Password Not Found\n", e.ID)
 				}
-				e.Ack <- false
+				e.Ack <- r
 			case e := <-w.SetPassword:
+				// log.Printf("SetPassword - ID: %s, Password: %s\n", e.ID, e.Password)
 				w.db.Auth[e.ID] = hashPassword(e.Password)
 				e.Ack <- true
 			}
@@ -462,7 +472,7 @@ func (w *World) WorldThread() func() {
 }
 
 func hashPassword(pw string) PasswordHash {
-	return sha512.Sum512([]byte(pw))
+	return sha256.Sum256([]byte(pw))
 }
 
 func (w *World) findPlayerByName(name string) *Player {
@@ -523,6 +533,8 @@ func (w *World) saveState() error {
 	ts := now.Format(time.RFC3339)
 	ts = strings.Replace(ts, ":", "", -1)
 	fn := fmt.Sprintf("world-%s.gob", ts)
+	fn = path.Join("backup", fn)
+	os.Mkdir("backup", 0700)
 	file, err := os.Create(fn)
 	if err != nil {
 		log.Printf("ERROR: Could not save world state: %s\n", err.Error())

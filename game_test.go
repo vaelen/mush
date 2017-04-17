@@ -51,3 +51,14 @@ func TestIDType(t *testing.T) {
 		}
 	}
 }
+
+func TestPasswordHash(t *testing.T) {
+	s := "correct horse battery staple"
+	correctHash := PasswordHash{
+		196, 187, 203, 31, 190, 201, 157, 101, 191, 89, 216, 92, 140, 182, 46, 226, 219, 150, 63, 15, 225, 6, 244, 131, 217, 175, 167, 59, 212, 227, 154, 138,
+	}
+	h := hashPassword(s)
+	if h != correctHash {
+		t.Errorf("hashPassword(%s) = %v, but we expected %v.", s, h, correctHash)
+	}
+}

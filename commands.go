@@ -505,6 +505,7 @@ func lookItem(c *Connection, i *Item) string {
 }
 
 const (
+	h5  = "-----"
 	h10 = "----------"
 	h15 = "---------------"
 	h20 = "--------------------"
@@ -515,22 +516,26 @@ const (
 // TODO: Have the column widths auto-adjust to fit the data
 func (c *Connection) Who() {
 	s := "Players Currently Online:\n"
-	f := "%10s %20s %20s %30s %15s\n"
-	s += fmt.Sprintf(f, "Connection", "Player", "Location", "Connected", "Idle")
-	s += fmt.Sprintf(f, h10, h20, h20, h30, h15)
+	f := "%10s %20s %20s %30s %15s %5s\n"
+	s += fmt.Sprintf(f, "Connection", "Player", "Location", "Connected", "Idle", "Admin")
+	s += fmt.Sprintf(f, h10, h20, h20, h30, h15, h5)
 	for _, conn := range c.Server.Connections() {
 		playerName := "[Authenticating]"
 		locName := "[UNKNOWN]"
+		admin := "No"
 		if conn.Authenticated && conn.Player != nil {
 			playerName = conn.Player.String()
 			locName = c.LocationName(conn.Player.Location)
+			if conn.Player.Admin {
+				admin = "Yes"
+			}
 		}
 
 		connID := fmt.Sprintf("%10d", conn.ID)
 		connected := conn.Connected.Format(time.RFC1123)
 		idle := time.Since(conn.LastActed).String()
 
-		s += fmt.Sprintf(f, connID, playerName, locName, connected, idle)
+		s += fmt.Sprintf(f, connID, playerName, locName, connected, idle, admin)
 
 	}
 	s += "\n"

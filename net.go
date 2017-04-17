@@ -21,6 +21,7 @@ package mush
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -92,14 +93,55 @@ func NewServer() Server {
 	}
 }
 
-// StartServer starts the given Server instance, calling all necessary goroutines.
-func (s *Server) StartServer(addr string) {
-	log.Printf("Starting %s on %s\n", VersionString(), addr)
+type listener struct {
+	tcp *net.TCPListener
+	l   net.Listener
+}
+
+func (l *listener) Close() {
+	l.l.Close()
+}
+
+func (s *Server) newTCPListener(addr string) listener {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer l.Close()
+	r := listener{l: l}
+	tcpL, ok := l.(*net.TCPListener)
+	if ok {
+		r.tcp = tcpL
+	}
+	return r
+}
+
+func (s *Server) newTLSListener(tlsAddr string) listener {
+	l, err := net.Listen("tcp", tlsAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tls := tls.NewListener(l, s.tlsConfig())
+	r := listener{l: tls}
+
+	tcpL, ok := l.(*net.TCPListener)
+	if ok {
+		r.tcp = tcpL
+	}
+	return r
+}
+
+// StartServer starts the given Server instance, calling all necessary goroutines.
+func (s *Server) StartServer(addr string, tlsAddr string) {
+	log.Printf("Starting %s. Regular: %s, TLS: %s\n", VersionString(), addr, tlsAddr)
+	listeners := make([]listener, 0)
+
+	listeners = append(listeners, s.newTCPListener(addr))
+	listeners = append(listeners, s.newTLSListener(tlsAddr))
+
+	for _, l := range listeners {
+		defer l.Close()
+	}
+
 	for {
 		select {
 		case <-s.Shutdown:
@@ -116,22 +158,33 @@ func (s *Server) StartServer(addr string) {
 			return
 		default:
 			// Wait for a connection.
-			tcpL, ok := l.(*net.TCPListener)
-			if ok {
-				tcpL.SetDeadline(time.Now().Add(1e9))
-			}
-			conn, err := l.Accept()
-			if err != nil {
-				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-					// Timed out waiting for a connection
-					continue
+			for x, l := range listeners {
+				if l.tcp != nil {
+					l.tcp.SetDeadline(time.Now().Add(1e9))
+				} else {
+					log.Printf("Couldn't set deadline for listener %d.\n", x)
 				}
-				// This is a real error
-				log.Fatal(err)
+				conn, err := l.l.Accept()
+				if err != nil {
+					if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+						// Timed out waiting for a connection
+						continue
+					}
+					// This is a real error
+					log.Fatal(err)
+				}
+				go connectionWorker(s.newConnection(conn))
 			}
-			go connectionWorker(s.newConnection(conn))
 		}
 	}
+}
+
+func (s *Server) tlsConfig() *tls.Config {
+	cer, err := tls.LoadX509KeyPair("server.crt", "server.key")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &tls.Config{Certificates: []tls.Certificate{cer}}
 }
 
 func (s *Server) newConnection(conn net.Conn) *Connection {
@@ -322,7 +375,7 @@ func Login(c *Connection) (bool, error) {
 		fmt.Fprintf(w, "When choosing a password, please don't use one you normally use elsewhere.\n")
 		w.Flush()
 		for {
-			pw, err := readPassword("Choose Password => ", r, w)
+			pw, err = readPassword("Choose Password => ", r, w)
 			if err != nil {
 				return false, err
 			}
