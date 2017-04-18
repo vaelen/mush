@@ -231,7 +231,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "list",
-		Help: "List your rooms or items. Usage: list <rooms|items>",
+		Help: "List your rooms or items. Usage: list <rooms|items|players>",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if c.Player == nil {
@@ -239,13 +239,37 @@ func addCommands(c *Connection) {
 			}
 			if len(e.Args) > 0 {
 				t := strings.TrimSpace(strings.ToLower(e.Args[0]))
-				if t == "rooms" {
-					rooms := c.FindRoomsByOwner(c.Player.ID)
+				all := false
+				if t == "all" && c.IsAdmin() && len(e.Args) > 1 {
+					all = true
+					t = strings.TrimSpace(strings.ToLower(e.Args[1]))
+				}
+				switch t {
+				case "rooms":
+					var rooms []*Room
+					if all {
+						rooms = c.FindAllRooms()
+					} else {
+						rooms = c.FindRoomsByOwner(c.Player.ID)
+					}
 					c.ListRooms(rooms)
-				} else if t == "items" {
-					items := c.FindItemsByOwner(c.Player.ID)
+				case "items":
+					var items []*Item
+					if all {
+						items = c.FindAllItems()
+					} else {
+						items = c.FindItemsByOwner(c.Player.ID)
+					}
 					c.ListItems(items)
-				} else {
+				case "players":
+					var players []*Player
+					if all {
+						players = c.FindAllPlayers()
+					} else {
+						players = c.FindOnlinePlayersByLocation(nil)
+					}
+					c.ListPlayers(players)
+				default:
 					c.Println(e.Cmd.HelpText())
 				}
 			} else {
@@ -315,6 +339,9 @@ func (c *Connection) IsAdmin() bool {
 
 func (c *Connection) updateIdleTime() {
 	c.LastActed = time.Now()
+	if c.Player != nil {
+		c.Player.LastActed = time.Now()
+	}
 }
 
 func (c *Connection) findPlayerConnectionByName(target string) (targetID IDType, targetName string, loc Location) {
@@ -578,6 +605,33 @@ func (c *Connection) Who() {
 	s += "\n"
 	c.Printf(s)
 }
+
+// ListPlayers shows a list of players.
+func (c *Connection) ListPlayers(players []*Player) {
+	s := "Players:\n"
+	f := "%20s %20s %30s %5s\n"
+	s += fmt.Sprintf(f, "Player", "Location", "Last Active", "Admin")
+	s += fmt.Sprintf(f, h20, h20, h30, h5)
+	for _, p := range players {
+		playerName := "[Authenticating]"
+		locName := "[UNKNOWN]"
+		active := "[NEVER]"
+		admin := "No"
+		if p != nil {
+			playerName = p.String()
+			locName = c.LocationName(p.Location)
+			if p.Admin {
+				admin = "Yes"
+			}
+			active = fmt.Sprintf("%s ago", time.Since(p.LastActed).String())
+		}
+		s += fmt.Sprintf(f, playerName, locName, active, admin)
+
+	}
+	s += "\n"
+	c.Printf(s)
+}
+
 
 // ListRooms displays a list of the given rooms.
 func (c *Connection) ListRooms(rooms []*Room) {

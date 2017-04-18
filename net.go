@@ -476,6 +476,19 @@ func (c *Connection) LocationName(loc Location) string {
 	return locName
 }
 
+// FindAllPlayers returns all players in the database.
+// TODO: Replace with a channel
+func (c *Connection) FindAllPlayers() []*Player {
+	if c == nil {
+		return nil
+	}
+	players := make([]*Player, 0)
+	for _, p := range c.Server.World.db.Players {
+		players = append(players, p)
+	}
+	return players
+}
+
 // FindPlayerByID is a helper method that returns a player based on their ID.
 func (c *Connection) FindPlayerByID(id IDType) *Player {
 	ack := make(chan []*Player)
@@ -520,6 +533,19 @@ func (c *Connection) NewRoom(name string, description string) *Room {
 	r := <-ack
 	r.Description = description
 	return r
+}
+
+// FindAllRooms returns all rooms in the database.
+// TODO: Replace with a channel
+func (c *Connection) FindAllRooms() []*Room {
+	if c == nil {
+		return nil
+	}
+	rooms := make([]*Room, 0)
+	for _, r := range c.Server.World.db.Rooms {
+		rooms = append(rooms, r)
+	}
+	return rooms
 }
 
 // FindRoomByID is a helper method that returns a room based on its ID.
@@ -568,6 +594,19 @@ func (c *Connection) NewItem(name string, description string) *Item {
 	i := <-ack
 	i.Description = description
 	return i
+}
+
+// FindAllItems returns all items in the database.
+// TODO: Replace with a channel
+func (c *Connection) FindAllItems() []*Item {
+	if c == nil {
+		return nil
+	}
+	items := make([]*Item, 0)
+	for _, i := range c.Server.World.db.Items {
+		items = append(items, i)
+	}
+	return items
 }
 
 // FindItemByID is a helper method that finds an item based on its ID.

@@ -62,6 +62,7 @@ type Player struct {
 	Description string
 	Location    Location
 	Admin       bool
+	LastActed   time.Time
 }
 
 func (p *Player) String() string {
