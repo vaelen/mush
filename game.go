@@ -57,10 +57,11 @@ func ParseID(s string) (IDType, error) {
 
 // Player represents a player in the world.
 type Player struct {
-	ID       IDType
-	Name     string
-	Location Location
-	Admin    bool
+	ID          IDType
+	Name        string
+	Description string
+	Location    Location
+	Admin       bool
 }
 
 func (p *Player) String() string {
@@ -102,6 +103,10 @@ type Exit struct {
 	Locked          bool
 	Key             IDType
 	Attributes      map[string]string
+}
+
+func (e *Exit) String() string {
+	return fmt.Sprintf("%s [%s]", e.Name, e.ID)
 }
 
 // Item represents an item in the world.

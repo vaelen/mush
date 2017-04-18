@@ -595,40 +595,6 @@ func (c *Connection) FindItemsByLocation(loc Location) []*Item {
 	return <-ack
 }
 
-// FindLocalItem is a helper method for finding an item in a given location.
-func (c *Connection) FindLocalItem(loc Location, nameOrID string) (*Item, []*Item) {
-	if c.Player == nil {
-		return nil, nil
-	}
-	var item *Item
-	var foundItems []*Item
-	n := strings.TrimSpace(strings.ToLower(nameOrID))
-	id, err := ParseID(n)
-	if err == nil && id > 0 {
-		// Look up by id
-		i := c.FindItemByID(id)
-		if i != nil && i.Location == loc {
-			item = i
-		}
-	} else {
-		// Look up by name
-		items := c.FindItemsByLocation(loc)
-		foundItems := make([]*Item, 0)
-		for _, i := range items {
-			x := strings.TrimSpace(strings.ToLower(i.Name))
-			// if this item's name contains the name we were given
-			if strings.Contains(x, n) {
-				foundItems = append(foundItems, i)
-			}
-		}
-		if len(foundItems) == 1 {
-			item = foundItems[0]
-			foundItems = nil
-		}
-	}
-	return item, foundItems
-}
-
 // DestroyItem is a helper method that destroy an item.
 func (c *Connection) DestroyItem(id IDType) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
@@ -681,6 +647,71 @@ func (c *Connection) CanDestroyRoom(r *Room) bool {
 		return false
 	}
 	return true
+}
+
+// FindLocalThing is a helper method for finding an item, player, or exit in a given location.
+func (c *Connection) FindLocalThing(loc Location, nameOrID string, includeExits bool) (foundOne fmt.Stringer, foundMany []fmt.Stringer) {
+	if c.Player == nil {
+		return nil, nil
+	}
+	n := strings.TrimSpace(strings.ToLower(nameOrID))
+	id, err := ParseID(n)
+	if err == nil && id > 0 {
+		// Look up by id
+		i := c.FindItemByID(id)
+		if i != nil && i.Location == loc {
+			foundOne = i
+		}
+		if foundOne == nil {
+			for _, p := range c.FindOnlinePlayersByLocation(&loc) {
+				if p.ID == id {
+					foundOne = p
+					break
+				}
+			}
+		}
+		if foundOne == nil && includeExits && loc.Type == LocationRoom {
+			r := c.FindRoomByID(loc.ID)
+			if r != nil {
+				for _, e := range r.Exits {
+					if e.ID == id {
+						foundOne = &e
+						break
+					}
+				}
+			}
+		}
+	} else {
+		// Look up by name
+		foundMany = make([]fmt.Stringer, 0)
+		things := make([]fmt.Stringer, 0)
+		for _, i := range c.FindItemsByLocation(loc) {
+			things = append(things, i)
+		}
+		for _, p := range c.FindOnlinePlayersByLocation(&loc) {
+			things = append(things, p)
+		}
+		if foundOne == nil && includeExits && loc.Type == LocationRoom {
+			r := c.FindRoomByID(loc.ID)
+			if r != nil {
+				for _, e := range r.Exits {
+					things = append(things, &e)
+				}
+			}
+		}
+		for _, t := range things {
+			x := strings.TrimSpace(strings.ToLower(t.String()))
+			// if this item's name contains the name we were given
+			if strings.Contains(x, n) {
+				foundMany = append(foundMany, t)
+			}
+		}
+		if len(foundMany) == 1 {
+			foundOne = foundMany[0]
+			foundMany = nil
+		}
+	}
+	return foundOne, foundMany
 }
 
 // InLocation returns true if the user is logged in and in the given location.

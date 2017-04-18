@@ -422,7 +422,7 @@ func (c *Connection) Look(target string) {
 			if r == nil {
 				s = "You are lost.\n"
 			} else {
-				s = lookRoom(c, r)
+				s = c.lookRoom(r)
 			}
 		default:
 			// Not Yet Supported
@@ -430,12 +430,11 @@ func (c *Connection) Look(target string) {
 		}
 		c.Printf(s)
 	} else {
-		// TODO: Add players
 		// Look at a given target
-		roomItem, foundRoomItems := c.FindLocalItem(loc, target)
-		playerItem, foundPlayerItems := c.FindLocalItem(Location{ID: c.Player.ID, Type: LocationPlayer}, target)
+		roomItem, foundRoomItems := c.FindLocalThing(loc, target, true)
+		playerItem, foundPlayerItems := c.FindLocalThing(Location{ID: c.Player.ID, Type: LocationPlayer}, target, true)
 
-		allItems := make([]*Item, 0)
+		allItems := make([]fmt.Stringer, 0)
 		if roomItem != nil {
 			allItems = append(allItems, roomItem)
 		}
@@ -451,11 +450,13 @@ func (c *Connection) Look(target string) {
 
 		if len(allItems) > 1 {
 			// Multiple items found
-			c.Printf("Which item did you mean?\n")
-			c.ListItems(allItems)
+			c.Printf("Which thing did you mean?\n")
+			for _, i := range allItems {
+				c.Printf("%s\n", i)
+			}
 		} else if len(allItems) == 1 {
 			// Single item found
-			c.Printf(lookItem(c, allItems[0]))
+			c.Printf(c.lookThing(allItems[0]))
 		} else {
 			// No items found
 			c.Printf("That item is not here.\n")
@@ -464,8 +465,30 @@ func (c *Connection) Look(target string) {
 	}
 }
 
-func lookRoom(c *Connection, r *Room) string {
-	if c == nil || c.Player == nil || r == nil {
+func (c *Connection) lookThing(t interface{}) string {
+	if c != nil && t != nil {
+		i, ok := t.(*Item)
+		if ok {
+			return c.lookItem(i)
+		}
+		p, ok := t.(*Player)
+		if ok {
+			return c.lookPlayer(p)
+		}
+		e, ok := t.(*Exit)
+		if ok {
+			return c.lookExit(e)
+		}
+		r, ok := t.(*Room)
+		if ok {
+			return c.lookRoom(r)
+		}
+	}
+	return ""
+}
+
+func (c *Connection) lookRoom(r *Room) string {
+	if c == nil || c.Player == nil || !c.Authenticated || r == nil {
 		return ""
 	}
 	p := c.Player
@@ -497,11 +520,25 @@ func lookRoom(c *Connection, r *Room) string {
 	return s
 }
 
-func lookItem(c *Connection, i *Item) string {
-	if c == nil || c.Player == nil || i == nil {
+func (c *Connection) lookItem(i *Item) string {
+	if c == nil || c.Player == nil || !c.Authenticated || i == nil {
 		return ""
 	}
 	return fmt.Sprintf("%s\n", i.Description)
+}
+
+func (c *Connection) lookPlayer(p *Player) string {
+	if c == nil || c.Player == nil || !c.Authenticated || p == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s\n", p.Description)
+}
+
+func (c *Connection) lookExit(e *Exit) string {
+	if c == nil || c.Player == nil || !c.Authenticated || e == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s\n", e.LongDescription)
 }
 
 const (
@@ -567,15 +604,22 @@ func (c *Connection) Take(itemName string) {
 	if c.Player == nil {
 		return
 	}
-	item, foundItems := c.FindLocalItem(c.Player.Location, itemName)
-	if foundItems != nil {
+	foundOne, foundMany := c.FindLocalThing(c.Player.Location, itemName, false)
+	if foundMany != nil && len(foundMany) > 0 {
 		// Multiple items found
 		c.Printf("Which item did you mean?\n")
-		c.ListItems(foundItems)
-	} else if item != nil {
+		for _, t := range foundMany {
+			c.Printf("%s\n", t)
+		}
+	} else if foundOne != nil {
 		// Single item found
-		item.Location = Location{ID: c.Player.ID, Type: LocationPlayer}
-		c.Emote(fmt.Sprintf("picks up %s", item.Name), &c.Player.Location)
+		item, ok := foundOne.(*Item)
+		if ok {
+			item.Location = Location{ID: c.Player.ID, Type: LocationPlayer}
+			c.Emote(fmt.Sprintf("picks up %s", item.Name), &c.Player.Location)
+		} else {
+			c.Printf("You can't take that.\n")
+		}
 	} else {
 		// No items found
 		c.Printf("That item is not here.\n")
@@ -587,15 +631,22 @@ func (c *Connection) Drop(itemName string) {
 	if c.Player == nil {
 		return
 	}
-	item, foundItems := c.FindLocalItem(Location{ID: c.Player.ID, Type: LocationPlayer}, itemName)
-	if foundItems != nil {
+	foundOne, foundMany := c.FindLocalThing(Location{ID: c.Player.ID, Type: LocationPlayer}, itemName, false)
+	if foundMany != nil && len(foundMany) > 0 {
 		// Multiple items found
 		c.Printf("Which item did you mean?\n")
-		c.ListItems(foundItems)
-	} else if item != nil {
+		for _, t := range foundMany {
+			c.Printf("%s\n", t)
+		}
+	} else if foundOne != nil {
 		// Single item found
-		item.Location = c.Player.Location
-		c.Emote(fmt.Sprintf("drops %s", item.Name), &c.Player.Location)
+		item, ok := foundOne.(*Item)
+		if ok {
+			item.Location = c.Player.Location
+			c.Emote(fmt.Sprintf("drops %s", item.Name), &c.Player.Location)
+		} else {
+			c.Printf("You can't drop that.\n")
+		}
 	} else {
 		// No items found
 		c.Printf("You don't have that item.\n")
