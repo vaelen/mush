@@ -865,13 +865,27 @@ func (c *Connection) setItem(i *Item, field string, value string) {
 		fallthrough
 	case "description":
 		i.Description = value
+	case "owner":
+		id, err := ParseID(value)
+		if err != nil {
+			c.Printf("Owner must be an ID value of the form '@0'.\n")
+			return
+		}
+		p := c.FindPlayerByID(id)
+		if p == nil {
+			c.Printf("%s is not a player.\n")
+			return
+		}
+		i.Owner = id
 	default:
 		c.Printf("Can't set %s on %s.\n", field, i)
 		supportedFields := []string {
-			"name", "(desc)ription",
+			"name", "(desc)ription", "owner",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+		return
 	}
+	c.Printf("Set.\n")
 }
 
 func (c *Connection) setPlayer(p *Player, field string, value string) {
@@ -894,7 +908,9 @@ func (c *Connection) setPlayer(p *Player, field string, value string) {
 			"(desc)ription",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+		return
 	}
+	c.Printf("Set.\n")
 }
 
 func (c *Connection) setExit(e *Exit, field string, value string) {
@@ -943,14 +959,29 @@ func (c *Connection) setExit(e *Exit, field string, value string) {
 			return
 		}
 		e.Destination = id
+	case "owner":
+		id, err := ParseID(value)
+		if err != nil {
+			c.Printf("Owner must be an ID value of the form '@0'.\n")
+			return
+		}
+		p := c.FindPlayerByID(id)
+		if p == nil {
+			c.Printf("%s is not a player.\n")
+			return
+		}
+		e.Owner = id
 	default:
 		c.Printf("Can't set %s on %s.\n", field, e)
 		supportedFields := []string {
 			"name", "(desc)ription", "(long)description",
 			"(arrive)message", "(leave)message", "(dest)ination",
+			"owner",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+		return
 	}
+	c.Printf("Set.\n")
 }
 
 func (c *Connection) setRoom(r *Room, field string, value string) {
@@ -969,13 +1000,27 @@ func (c *Connection) setRoom(r *Room, field string, value string) {
 		fallthrough
 	case "description":
 		r.Description = value
+	case "owner":
+		id, err := ParseID(value)
+		if err != nil {
+			c.Printf("Owner must be an ID value of the form '@0'.\n")
+			return
+		}
+		p := c.FindPlayerByID(id)
+		if p == nil {
+			c.Printf("%s is not a player.\n")
+			return
+		}
+		r.Owner = id
 	default:
 		c.Printf("Can't set %s on %s.\n", field, r)
 		supportedFields := []string {
-			"name", "(desc)ription",
+			"name", "(desc)ription", "owner",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+		return
 	}
+	c.Printf("Set.\n")
 }
 
 
