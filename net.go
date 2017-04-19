@@ -584,6 +584,56 @@ func (c *Connection) DestroyRoom(id IDType) *Room {
 	return r
 }
 
+// NewExit is a helper method for creating a new exit.
+func (c *Connection) NewExit(name string, description string) *Exit {
+	if c == nil || !c.Authenticated || c.Player == nil || c.Player.Location.Type != LocationRoom {
+		return nil
+	}
+	room := c.Player.Location.ID
+	r := c.FindRoomByID(room)
+	if r == nil || !c.CanEditRoom(r, "Exits") {
+		// Can't Destroy
+		return nil
+	}
+	ack := make(chan *Exit)
+	c.Server.World.NewExit <- NewExitMessage{Room: room, Name: name, Owner: c.Player.ID, Ack: ack}
+	ex := <-ack
+	if ex != nil {
+		ex.Description = description
+	}
+	return ex
+}
+
+// DestroyExit is a helper method that destroys an exit.
+func (c *Connection) DestroyExit(id IDType) *Exit {
+	if c == nil || !c.Authenticated || c.Player == nil || c.Player.Location.Type != LocationRoom {
+		return nil
+	}
+	room := c.Player.Location.ID
+	r := c.FindRoomByID(room)
+	if r == nil || !c.CanEditRoom(r, "Exits") {
+		// Can't Destroy
+		return nil
+	}
+
+	var ex *Exit
+	for _, ex = range r.Exits {
+		if ex.ID == id {
+			break
+		}
+	}
+
+	if ex == nil {
+		return nil
+	}
+	
+	ack := make(chan bool)
+	c.Server.World.DestroyExit <- DestroyExitMessage{Room: room, ID: id, Ack: ack}
+	<-ack
+
+	return ex
+}
+
 // NewItem is a helper method that creates a new item.
 func (c *Connection) NewItem(name string, description string) *Item {
 	if c == nil || !c.Authenticated || c.Player == nil {
@@ -655,7 +705,10 @@ func (c *Connection) DestroyItem(id IDType) *Item {
 // CanEditItem returns true of the player can edit the field on the object.
 func (c *Connection) CanEditItem(i *Item, field string) bool {
 	// TODO: This can be made more granular later.
-	if c == nil || !c.Authenticated || c.Player == nil || i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
+	if c == nil || !c.Authenticated || c.Player == nil || i == nil {
+		return false
+	}
+	if i.Owner != c.Player.ID && !c.IsAdmin() {
 		return false
 	}
 	return true
@@ -664,7 +717,34 @@ func (c *Connection) CanEditItem(i *Item, field string) bool {
 // CanDestroyItem returns true of the player can destroy the item.
 func (c *Connection) CanDestroyItem(i *Item) bool {
 	// TODO: This can be made more granular later.
-	if c == nil || !c.Authenticated || c.Player == nil || i == nil || (i.Owner != c.Player.ID && !c.Player.Admin) {
+	if c == nil || !c.Authenticated || c.Player == nil || i == nil {
+		return false
+	}
+	if i.Owner != c.Player.ID && !c.IsAdmin() {
+		return false
+	}
+	return true
+}
+
+// CanEditPlayer returns true if the player can edit the field on the room.
+func (c *Connection) CanEditPlayer(p *Player, field string) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || p == nil {
+		return false
+	}
+	if p.ID != c.Player.ID && !c.IsAdmin() {
+		return false
+	}
+	return true
+}
+
+// CanDestroyPlayer returns true if the player can destroy the room.
+func (c *Connection) CanDestroyPlayer(p *Player) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || p == nil {
+		return false
+	}
+	if p.ID != c.Player.ID && !c.IsAdmin() {
 		return false
 	}
 	return true
@@ -673,7 +753,10 @@ func (c *Connection) CanDestroyItem(i *Item) bool {
 // CanEditRoom returns true if the player can edit the field on the room.
 func (c *Connection) CanEditRoom(r *Room, field string) bool {
 	// TODO: This can be made more granular later.
-	if c == nil || !c.Authenticated || c.Player == nil || r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
+	if c == nil || !c.Authenticated || c.Player == nil || r == nil {
+		return false
+	}
+	if r.Owner != c.Player.ID && !c.IsAdmin() {
 		return false
 	}
 	return true
@@ -682,7 +765,34 @@ func (c *Connection) CanEditRoom(r *Room, field string) bool {
 // CanDestroyRoom returns true if the player can destroy the room.
 func (c *Connection) CanDestroyRoom(r *Room) bool {
 	// TODO: This can be made more granular later.
-	if c == nil || !c.Authenticated || c.Player == nil || r == nil || (r.Owner != c.Player.ID && !c.Player.Admin) {
+	if c == nil || !c.Authenticated || c.Player == nil || r == nil {
+		return false
+	}
+	if r.Owner != c.Player.ID && !c.IsAdmin() {
+		return false
+	}
+	return true
+}
+
+// CanEditExit returns true if the player can edit the field on the room.
+func (c *Connection) CanEditExit(e *Exit, field string) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || e == nil {
+		return false
+	}
+	if e.Owner != c.Player.ID && !c.IsAdmin() {
+		return false
+	}
+	return true
+}
+
+// CanDestroyExit returns true if the player can destroy the room.
+func (c *Connection) CanDestroyExit(e *Exit) bool {
+	// TODO: This can be made more granular later.
+	if c == nil || !c.Authenticated || c.Player == nil || e == nil {
+		return false
+	}
+	if e.Owner != c.Player.ID && !c.IsAdmin() {
 		return false
 	}
 	return true
@@ -698,15 +808,25 @@ func (c *Connection) FindLocalThing(loc Location, nameOrID string, includeExits 
 	if err == nil && id > 0 {
 		// Look up by id
 		i := c.FindItemByID(id)
-		if i != nil && i.Location == loc {
+		if i != nil && (i.Location == loc || c.IsAdmin()) {
 			foundOne = i
 		}
 		if foundOne == nil {
-			for _, p := range c.FindOnlinePlayersByLocation(&loc) {
+			l := &loc
+			if c.IsAdmin() {
+				l = nil
+			}
+			for _, p := range c.FindOnlinePlayersByLocation(l) {
 				if p.ID == id {
 					foundOne = p
 					break
 				}
+			}
+		}
+		if foundOne == nil {
+			r := c.FindRoomByID(id)
+			if r != nil && (loc.ID == id || c.IsAdmin()) {
+				foundOne = r
 			}
 		}
 		if foundOne == nil && includeExits && loc.Type == LocationRoom {
@@ -714,7 +834,7 @@ func (c *Connection) FindLocalThing(loc Location, nameOrID string, includeExits 
 			if r != nil {
 				for _, e := range r.Exits {
 					if e.ID == id {
-						foundOne = &e
+						foundOne = e
 						break
 					}
 				}
@@ -724,19 +844,33 @@ func (c *Connection) FindLocalThing(loc Location, nameOrID string, includeExits 
 		// Look up by name
 		foundMany = make([]fmt.Stringer, 0)
 		things := make([]fmt.Stringer, 0)
+		switch loc.Type {
+		case LocationItem:
+			i := c.FindItemByID(loc.ID)
+			if i != nil {
+				things = append(things, i)
+			}
+		case LocationPlayer:
+			p := c.FindPlayerByID(loc.ID)
+			if p != nil {
+				things = append(things, p)
+			}
+		case LocationRoom:
+			r := c.FindRoomByID(loc.ID)
+			if r != nil {
+				things = append(things, r)
+				if includeExits {
+					for _, e := range r.Exits {
+						things = append(things, e)
+					}
+				}
+			}
+		}
 		for _, i := range c.FindItemsByLocation(loc) {
 			things = append(things, i)
 		}
 		for _, p := range c.FindOnlinePlayersByLocation(&loc) {
 			things = append(things, p)
-		}
-		if foundOne == nil && includeExits && loc.Type == LocationRoom {
-			r := c.FindRoomByID(loc.ID)
-			if r != nil {
-				for _, e := range r.Exits {
-					things = append(things, &e)
-				}
-			}
 		}
 		for _, t := range things {
 			x := strings.TrimSpace(strings.ToLower(t.String()))

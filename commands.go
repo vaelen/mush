@@ -21,6 +21,7 @@ package mush
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -161,7 +162,7 @@ func addCommands(c *Connection) {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "create",
-		Help: "Creates a new room or item. Usage: create <room|item> <name> [description]",
+		Help: "Creates a new room or item. Usage: create <room|item|exit> <name> [description]",
 		Func: func(e *ishell.Context) {
 			c.updateIdleTime()
 			if len(e.Args) > 1 {
@@ -171,21 +172,29 @@ func addCommands(c *Connection) {
 				if len(e.Args) > 2 {
 					d = e.Args[2]
 				}
-				if t == "room" {
+				switch t {
+				case "room":
 					r := c.NewRoom(n, d)
 					if r == nil {
 						c.Println("Couldn't Create Room")
 					} else {
 						c.Printf("New Room Created: %s\n", r.String())
 					}
-				} else if t == "item" {
+				case "item":
 					i := c.NewItem(n, d)
 					if i == nil {
 						c.Println("Couldn't Create Item")
 					} else {
 						c.Printf("New Item Created: %s\n", i.String())
 					}
-				} else {
+				case "exit":
+					e := c.NewExit(n, d)
+					if e == nil {
+						c.Println("Couldn't Create Exit")
+					} else {
+						c.Printf("New Exit Created: %s\n", e.String())
+					}					
+				default:
 					c.Println(e.Cmd.HelpText())
 				}
 			} else {
@@ -206,21 +215,30 @@ func addCommands(c *Connection) {
 					c.Printf("Couldn't parse id: %s\n", e.Args[1])
 					return
 				}
-				if t == "room" {
+				switch t {
+				case "room":
 					r := c.DestroyRoom(id)
 					if r == nil {
 						c.Println("Couldn't Destroy Room")
 					} else {
 						c.Printf("Room Destroyed: %s\n", r.String())
 					}
-				} else if t == "item" {
+				case "exit":
+					ex := c.DestroyExit(id)
+					if ex == nil {
+						c.Println("Couldn't Destroy Exit")
+					} else {
+						c.Printf("Exit Destroyed: %s\n", ex.String())
+					}
+
+				case "item":
 					i := c.DestroyItem(id)
 					if i == nil {
 						c.Println("Couldn't Destroy Item")
 					} else {
 						c.Printf("Item Destroyed: %s\n", i.String())
 					}
-				} else {
+				default:
 					c.Println(e.Cmd.HelpText())
 				}
 			} else {
@@ -228,7 +246,7 @@ func addCommands(c *Connection) {
 			}
 		},
 	})
-
+	
 	shell.AddCmd(&ishell.Cmd{
 		Name: "list",
 		Help: "List your rooms or items. Usage: list <rooms|items|players>",
@@ -317,6 +335,32 @@ func addCommands(c *Connection) {
 		},
 	})
 
+	shell.AddCmd(&ishell.Cmd{
+		Name: "set",
+		Help: "Sets a value on a player, room, item, or exit. Usage: set <target> <field_name> <value>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 2 {
+				c.Set(e.Args[0], e.Args[1], e.Args[2])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "show",
+		Help: "Shows details about a player, room, item, or exit. Usage: show <target>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				c.Show(e.Args[0])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+	
 	shell.AddCmd(&ishell.Cmd{
 		Name: "go",
 		Help: "Go somewhere.  Usage: go <direction>",
@@ -455,40 +499,13 @@ func (c *Connection) Look(target string) {
 			// Not Yet Supported
 			s = "You don't know where you are.\n"
 		}
-		c.Printf(s)
+		c.Printf("%s\n", s)
 	} else {
 		// Look at a given target
-		roomItem, foundRoomItems := c.FindLocalThing(loc, target, true)
-		playerItem, foundPlayerItems := c.FindLocalThing(Location{ID: c.Player.ID, Type: LocationPlayer}, target, true)
-
-		allItems := make([]fmt.Stringer, 0)
-		if roomItem != nil {
-			allItems = append(allItems, roomItem)
+		t := c.findTarget(target)
+		if t != nil {
+			c.Printf("%s\n", c.lookThing(t))
 		}
-		if playerItem != nil {
-			allItems = append(allItems, playerItem)
-		}
-		if foundRoomItems != nil {
-			allItems = append(allItems, foundRoomItems...)
-		}
-		if foundPlayerItems != nil {
-			allItems = append(allItems, foundPlayerItems...)
-		}
-
-		if len(allItems) > 1 {
-			// Multiple items found
-			c.Printf("Which thing did you mean?\n")
-			for _, i := range allItems {
-				c.Printf("%s\n", i)
-			}
-		} else if len(allItems) == 1 {
-			// Single item found
-			c.Printf(c.lookThing(allItems[0]))
-		} else {
-			// No items found
-			c.Printf("That item is not here.\n")
-		}
-
 	}
 }
 
@@ -725,6 +742,7 @@ func (c *Connection) Go(target string) {
 				dest := c.FindRoomByID(e.Destination)
 				if dest == nil {
 					c.Printf("That doesn't seem to go anywhere.\n")
+					return
 				}
 				// TODO: Handle locks here!
 				c.Move(Location{ID: dest.ID, Type: LocationRoom}, e.LeaveMessage, e.ArriveMessage)
@@ -747,4 +765,344 @@ func (c *Connection) Move(destination Location, leaveMessage string, arriveMessa
 	c.Player.Location = destination
 	c.Look("")
 	c.LocationPrintf(&destination, arriveMessage+"\n", c.Player.Name)
+}
+
+func (c *Connection) findTarget(target string) fmt.Stringer {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return nil
+	}
+
+	roomTarget, foundRoomTargets := c.FindLocalThing(c.Player.Location, target, true)
+	playerTarget, foundPlayerTargets := c.FindLocalThing(Location{ID: c.Player.ID, Type: LocationPlayer}, target, true)
+
+	targets := make(map[string]fmt.Stringer)
+	if roomTarget != nil {
+		targets[roomTarget.String()] = roomTarget
+	}
+	if playerTarget != nil {
+		targets[playerTarget.String()] = playerTarget
+	}
+	if foundRoomTargets != nil {
+		for _, t := range foundRoomTargets {
+			targets[t.String()] = t
+		}
+	}
+	if foundPlayerTargets != nil {
+		for _, t := range foundPlayerTargets {
+			targets[t.String()] = t
+		}
+	}
+
+	l := len(targets)
+	
+	switch {
+	case l > 1:
+		// Multiple items found
+		c.Printf("Which thing did you mean?\n")
+		for s := range targets {
+			c.Printf("%s\n", s)
+		}
+	case l == 1:
+		// Single item found
+		for _, i := range targets {
+			return i
+		}
+	default:
+		// No items found
+		c.Printf("That is not here.\n")
+	}
+	
+	return nil
+}
+
+// Set executes the "set" action by setting a given value on a given target
+func (c *Connection) Set(target string, field string, value string) {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+
+	t := c.findTarget(target)
+	if t != nil {
+		c.setThing(t, field, value)
+	}
+
+}
+
+func (c *Connection) setThing(t interface{}, field string, value string) {
+	if c != nil && t != nil {
+		i, ok := t.(*Item)
+		if ok {
+			c.setItem(i, field, value)
+		}
+		p, ok := t.(*Player)
+		if ok {
+			c.setPlayer(p, field, value)
+		}
+		e, ok := t.(*Exit)
+		if ok {
+			c.setExit(e, field, value)
+		}
+		r, ok := t.(*Room)
+		if ok {
+			c.setRoom(r, field, value)
+		}
+	}
+}
+
+func (c *Connection) setItem(i *Item, field string, value string) {
+	if c == nil || i == nil || c.Player == nil || !c.Authenticated {
+		return
+	}
+	f := strings.TrimSpace(strings.ToLower(field))
+	if !c.CanEditItem(i, f) {
+		c.Printf("Can't set %s on %s.\n", field, i)
+		return
+	}
+	switch f {
+	case "name":
+		i.Name = value
+	case "desc":
+		fallthrough
+	case "description":
+		i.Description = value
+	default:
+		c.Printf("Can't set %s on %s.\n", field, i)
+		supportedFields := []string {
+			"name", "(desc)ription",
+		}
+		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+	}
+}
+
+func (c *Connection) setPlayer(p *Player, field string, value string) {
+	if c == nil || p == nil || c.Player == nil || !c.Authenticated {
+		return
+	}
+	f := strings.TrimSpace(strings.ToLower(field))
+	if !c.CanEditPlayer(p, f) {
+		c.Printf("Can't set %s on %s.\n", field, p)
+		return
+	}
+	switch f {
+	case "desc":
+		fallthrough
+	case "description":
+		p.Description = value
+	default:
+		c.Printf("Can't set %s on %s.\n", field, p)
+		supportedFields := []string {
+			"(desc)ription",
+		}
+		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+	}
+}
+
+func (c *Connection) setExit(e *Exit, field string, value string) {
+	if c == nil || e == nil || c.Player == nil || !c.Authenticated {
+		return
+	}
+	f := strings.TrimSpace(strings.ToLower(field))
+	if !c.CanEditExit(e, f) {
+		c.Printf("Can't set %s on %s.\n", field, e)
+		return
+	}
+	switch f {
+	case "name":
+		e.Name = value
+	case "desc":
+		fallthrough
+	case "description":
+		e.Description = value
+	case "long":
+		fallthrough
+	case "longdescription":
+		e.LongDescription = value
+	case "arrive":
+		fallthrough
+	case "arrivemessage":
+		e.ArriveMessage = value
+	case "leave":
+		fallthrough
+	case "leavemessage":
+		e.LeaveMessage = value
+	case "dest":
+		fallthrough
+	case "destination":
+		id, err := ParseID(value)
+		if err != nil {
+			c.Printf("Destination must be an ID value of the form '@0'.\n")
+			return
+		}
+		r := c.FindRoomByID(id)
+		if r == nil {
+			c.Printf("%s is not a room.\n")
+			return
+		}
+		if !c.CanEditRoom(r, "exits") {
+			c.Printf("You don't have permission to link an exit to that room.\n")
+			return
+		}
+		e.Destination = id
+	default:
+		c.Printf("Can't set %s on %s.\n", field, e)
+		supportedFields := []string {
+			"name", "(desc)ription", "(long)description",
+			"(arrive)message", "(leave)message", "(dest)ination",
+		}
+		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+	}
+}
+
+func (c *Connection) setRoom(r *Room, field string, value string) {
+	if c == nil || r == nil || c.Player == nil || !c.Authenticated {
+		return
+	}
+	f := strings.TrimSpace(strings.ToLower(field))
+	if !c.CanEditRoom(r, f) {
+		c.Printf("Can't set %s on %s.\n", field, r)
+		return
+	}
+	switch f {
+	case "name":
+		r.Name = value
+	case "desc":
+		fallthrough
+	case "description":
+		r.Description = value
+	default:
+		c.Printf("Can't set %s on %s.\n", field, r)
+		supportedFields := []string {
+			"name", "(desc)ription",
+		}
+		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
+	}
+}
+
+
+// Show executes the "show" action by showing a given target's field values
+func (c *Connection) Show(target string) {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+
+	t := c.findTarget(target)
+	if t != nil {
+		c.Printf("%s\n", c.showThing(t))
+	}
+
+}
+
+func (c *Connection) showThing(t interface{}) string {
+	if c != nil && t != nil {
+		i, ok := t.(*Item)
+		if ok {
+			return c.showItem(i)
+		}
+		p, ok := t.(*Player)
+		if ok {
+			return c.showPlayer(p)
+		}
+		e, ok := t.(*Exit)
+		if ok {
+			return c.showExit(e)
+		}
+		r, ok := t.(*Room)
+		if ok {
+			return c.showRoom(r)
+		}
+	}
+	return ""
+}
+
+func (c *Connection) showItem(i *Item) string {
+	if c == nil || i == nil {
+		return ""
+	}
+	s := ""
+	f := "%15s : %s\n"
+	q := "%15s : %q\n"
+	a := "    " + q
+	s += fmt.Sprintf(f, "ID", i.ID)
+	s += fmt.Sprintf(q, "Name", i.Name)
+	s += fmt.Sprintf(q, "Description", i.Description)
+	s += fmt.Sprintf(f, "Owner", i.Owner)
+	s += fmt.Sprintf(f, "Location", c.LocationName(i.Location))
+	s += fmt.Sprintf(f, "Attributes", "")
+	for k, v := range i.Attributes {
+		s += fmt.Sprintf(a, k, v)
+	}
+	return s
+}
+
+func (c *Connection) showPlayer(p *Player) string {
+	if c == nil || p == nil {
+		return ""
+	}
+	s := ""
+	f := "%15s : %s\n"
+	q := "%15s : %q\n"
+	// a := "    " + q
+	s += fmt.Sprintf(f, "ID", p.ID)
+	s += fmt.Sprintf(q, "Name", p.Name)
+	s += fmt.Sprintf(q, "Description", p.Description)
+	s += fmt.Sprintf(f, "Location", c.LocationName(p.Location))
+	s += fmt.Sprintf(f, "LastActed", p.LastActed)
+	s += fmt.Sprintf(f, "Attributes", "")
+	/*
+	for k, v := range p.Attributes {
+		s += fmt.Sprintf(a, k, v)
+	}
+    */
+	return s	
+}
+
+func (c *Connection) showExit(e *Exit) string {
+	if c == nil || e == nil {
+		return ""
+	}
+	s := ""
+	f := "%15s : %s\n"
+	q := "%15s : %q\n"
+	a := "    " + q
+	s += fmt.Sprintf(f, "ID", e.ID)
+	s += fmt.Sprintf(q, "Name", e.Name)
+	s += fmt.Sprintf(q, "Description", e.Description)
+	s += fmt.Sprintf(q, "LongDescription", e.LongDescription)
+	s += fmt.Sprintf(f, "Destination", e.Destination)
+	s += fmt.Sprintf(q, "ArriveMessage", e.ArriveMessage)
+	s += fmt.Sprintf(q, "LeaveMessage", e.LeaveMessage)
+	s += fmt.Sprintf(f, "Owner", e.Owner)
+	s += fmt.Sprintf(f, "Hidden", strconv.FormatBool(e.Hidden))
+	s += fmt.Sprintf(f, "Lockable", strconv.FormatBool(e.Lockable))
+	s += fmt.Sprintf(f, "Locked", strconv.FormatBool(e.Locked))
+	s += fmt.Sprintf(f, "Key", e.Key)
+	s += fmt.Sprintf(f, "Attributes", "")
+	for k, v := range e.Attributes {
+		s += fmt.Sprintf(a, k, v)
+	}
+	return s
+}
+
+func (c *Connection) showRoom(r *Room) string {
+	if c == nil || r == nil {
+		return ""
+	}
+	s := ""
+	f := "%15s : %s\n"
+	q := "%15s : %q\n"
+	a := "    " + q
+	b := "    %s\n"
+	s += fmt.Sprintf(f, "ID", r.ID)
+	s += fmt.Sprintf(q, "Name", r.Name)
+	s += fmt.Sprintf(q, "Description", r.Description)
+	s += fmt.Sprintf(f, "Owner", r.Owner)
+	s += fmt.Sprintf(f, "Exits", "")
+	for _, e := range r.Exits {
+		s += fmt.Sprintf(b, e)
+	}
+	s += fmt.Sprintf(f, "Attributes", "")
+	for k, v := range r.Attributes {
+		s += fmt.Sprintf(a, k, v)
+	}
+	return s
 }

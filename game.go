@@ -77,7 +77,7 @@ type Room struct {
 	ID          IDType
 	Name        string
 	Description string
-	Exits       []Exit
+	Exits       []*Exit
 	Owner       IDType
 	Attributes  map[string]string
 }
@@ -145,6 +145,21 @@ type Location struct {
 	Type LocationType
 }
 
+func (l Location) String() string {
+	var t string
+	switch l.Type {
+	case LocationRoom:
+		t = "Room"
+	case LocationPlayer:
+		t = "Player"
+	case LocationItem:
+		t = "Item"
+	default:
+		t = "Lost"
+	}
+	return fmt.Sprintf("%s: %s", t, l.ID)
+}
+
 // PasswordHash stores a password hash
 type PasswordHash [sha256.Size]byte
 
@@ -174,6 +189,9 @@ type World struct {
 	NewRoom     chan NewRoomMessage
 	DestroyRoom chan DestroyRoomMessage
 
+	NewExit     chan NewExitMessage
+	DestroyExit chan DestroyExitMessage
+	
 	FindItem    chan FindItemMessage
 	NewItem     chan NewItemMessage
 	DestroyItem chan DestroyItemMessage
@@ -205,6 +223,9 @@ func NewWorld() *World {
 		NewRoom:     make(chan NewRoomMessage),
 		DestroyRoom: make(chan DestroyRoomMessage),
 
+		NewExit:     make(chan NewExitMessage),
+		DestroyExit: make(chan DestroyExitMessage),
+
 		FindItem:    make(chan FindItemMessage),
 		NewItem:     make(chan NewItemMessage),
 		DestroyItem: make(chan DestroyItemMessage),
@@ -234,7 +255,7 @@ func NewWorld() *World {
 
 	w.db.Rooms[r2.ID] = r2
 
-	r.Exits = append(r.Exits, Exit{
+	r.Exits = append(r.Exits, &Exit{
 		ID:              w.nextID(),
 		Name:            "down",
 		Description:     "Stairs spiral down from here to the cellar.",
@@ -245,7 +266,7 @@ func NewWorld() *World {
 		Attributes:      make(map[string]string),
 	})
 
-	r2.Exits = append(r2.Exits, Exit{
+	r2.Exits = append(r2.Exits, &Exit{
 		ID:              w.nextID(),
 		Name:            "up",
 		Description:     "Stairs spiral up from here to the main lobby.",
@@ -302,6 +323,22 @@ type NewRoomMessage struct {
 
 // DestroyRoomMessage is sent to DestroyRoom to destroy a room.
 type DestroyRoomMessage struct {
+	Room IDType
+	ID  IDType
+	Ack chan bool
+}
+
+// NewExitMessage is sent to NewExit to create a new exit.
+type NewExitMessage struct {
+	Room  IDType
+	Name  string
+	Owner IDType
+	Ack   chan *Exit
+}
+
+// DestroyExitMessage is sent to DestroyExit to destroy an exit.
+type DestroyExitMessage struct {
+	Room IDType
 	ID  IDType
 	Ack chan bool
 }
@@ -415,6 +452,35 @@ func (w *World) WorldThread() func() {
 				}
 				log.Printf("Destroy Room: %d\n", e.ID)
 				delete(w.db.Rooms, e.ID)
+				e.Ack <- true
+			case e := <-w.NewExit:
+				log.Printf("New Exit: %s\n", e.Name)
+				id := w.nextID()
+				r := w.db.Rooms[e.Room]
+				if r == nil {
+					e.Ack <- nil
+				}
+				ex := &Exit{
+					ID:         id,
+					Name:       e.Name,
+					Owner:      e.Owner,
+					Attributes: make(map[string]string),
+				}
+				r.Exits = append(r.Exits, ex)
+				e.Ack <- ex
+			case e := <-w.DestroyExit:
+				log.Printf("Destroy Exit: %d\n", e.ID)
+				r := w.db.Rooms[e.Room]
+				if r == nil {
+					e.Ack <- false
+				}
+				for i, ex := range r.Exits {
+					if ex != nil && ex.ID == e.ID {
+						r.Exits[i] = nil
+						r.Exits = append(r.Exits[:i], r.Exits[i+1:]...)
+						break
+					}
+				}
 				e.Ack <- true
 			case e := <-w.FindItem:
 				r := make([]*Item, 0)
