@@ -374,6 +374,19 @@ func addCommands(c *Connection) {
 		},
 	})
 
+	shell.AddCmd(&ishell.Cmd{
+		Name: "summon",
+		Help: "Summons a player or item. (admin) Usage: summon <id>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				c.Summon(e.Args[0])
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+	
 }
 
 // IsAdmin returns true if the player is an admin.
@@ -1023,6 +1036,62 @@ func (c *Connection) setRoom(r *Room, field string, value string) {
 	c.Printf("Set.\n")
 }
 
+// Summon executes the "summon" action by forcefully relocating a player or object.
+func (c *Connection) Summon(target string) {
+	if c == nil || !c.Authenticated || c.Player == nil {
+		return
+	}
+	if !c.IsAdmin() {
+		c.Printf("Only admins can summon things.\n")
+	}
+
+	t := c.findTarget(target)
+	if t != nil {
+		i, ok := t.(*Item)
+		if ok {
+			switch i.Location.Type {
+			case LocationRoom:
+				c.LocationPrintf(&i.Location, "%s dissapears suddenly.\n", i.Name)
+			case LocationPlayer:
+				// See if player is online
+				for _, conn := range c.Server.Connections() {
+					if conn.Player != nil && conn.Authenticated && conn.Player.ID == i.Location.ID {
+						conn.Printf("%s disappears suddenly from your inventory.\n", i.Name)
+					}
+				}
+			}
+			i.Location = Location{Type: LocationPlayer, ID: c.Player.ID}
+			c.Printf("Summoned %s.\n", i)
+			return
+		}
+		p, ok := t.(*Player)
+		if ok {
+			// See if player is online
+			for _, conn := range c.Server.Connections() {
+				if conn.Player != nil && conn.Authenticated && conn.Player.ID == p.ID {
+					conn.Move(c.Player.Location, "%s disappears suddenly.", "%s appears suddenly.")
+					return
+				}
+			}
+			// If not, then move the old fashioned way
+			p.Location = c.Player.Location
+			c.Printf("Summoned %s.\n", p)
+			return
+		}
+		/*
+		e, ok := t.(*Exit)
+		if ok {
+			return
+		}
+        */
+		r, ok := t.(*Room)
+		if ok {
+			c.Move(Location{Type: LocationRoom, ID: r.ID}, "%s dissapears suddenly.", "%s appears suddenly.")
+			return
+		}
+	}
+	c.Printf("Couldn't summon %s\n", target)
+}
 
 // Show executes the "show" action by showing a given target's field values
 func (c *Connection) Show(target string) {
@@ -1034,7 +1103,6 @@ func (c *Connection) Show(target string) {
 	if t != nil {
 		c.Printf("%s\n", c.showThing(t))
 	}
-
 }
 
 func (c *Connection) showThing(t interface{}) string {
