@@ -698,7 +698,7 @@ func (c *Connection) Take(itemName string) {
 	} else if foundOne != nil {
 		// Single item found
 		item, ok := foundOne.(*Item)
-		if ok {
+		if ok && (!item.Attached || item.Owner == c.Player.ID || c.IsAdmin()) {
 			item.Location = Location{ID: c.Player.ID, Type: LocationPlayer}
 			c.Emote(fmt.Sprintf("picks up %s", item.Name), &c.Player.Location)
 		} else {
@@ -890,10 +890,17 @@ func (c *Connection) setItem(i *Item, field string, value string) {
 			return
 		}
 		i.Owner = id
+	case "attached":
+		b, err := strconv.ParseBool(strings.TrimSpace(strings.ToLower(value)))
+		if err != nil {
+			c.Printf("Attached can only be set to either 'true' or 'false'.\n")
+			return
+		}
+		i.Attached = b
 	default:
 		c.Printf("Can't set %s on %s.\n", field, i)
 		supportedFields := []string {
-			"name", "(desc)ription", "owner",
+			"name", "(desc)ription", "owner", "attached",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
 		return
@@ -1134,12 +1141,13 @@ func (c *Connection) showItem(i *Item) string {
 	s := ""
 	f := "%15s : %s\n"
 	q := "%15s : %q\n"
-	a := "    " + q
+	a := "                  " + q
 	s += fmt.Sprintf(f, "ID", i.ID)
 	s += fmt.Sprintf(q, "Name", i.Name)
 	s += fmt.Sprintf(q, "Description", i.Description)
 	s += fmt.Sprintf(f, "Owner", i.Owner)
 	s += fmt.Sprintf(f, "Location", c.LocationName(i.Location))
+	s += fmt.Sprintf(f, "Attached", strconv.FormatBool(i.Attached))
 	s += fmt.Sprintf(f, "Attributes", "")
 	for k, v := range i.Attributes {
 		s += fmt.Sprintf(a, k, v)
@@ -1176,7 +1184,7 @@ func (c *Connection) showExit(e *Exit) string {
 	s := ""
 	f := "%15s : %s\n"
 	q := "%15s : %q\n"
-	a := "    " + q
+	a := "                  " + q
 	s += fmt.Sprintf(f, "ID", e.ID)
 	s += fmt.Sprintf(q, "Name", e.Name)
 	s += fmt.Sprintf(q, "Description", e.Description)
@@ -1203,8 +1211,8 @@ func (c *Connection) showRoom(r *Room) string {
 	s := ""
 	f := "%15s : %s\n"
 	q := "%15s : %q\n"
-	a := "    " + q
-	b := "    %s\n"
+	a := "                  " + q
+	b := "                  %s\n"
 	s += fmt.Sprintf(f, "ID", r.ID)
 	s += fmt.Sprintf(q, "Name", r.Name)
 	s += fmt.Sprintf(q, "Description", r.Description)

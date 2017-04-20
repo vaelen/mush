@@ -117,6 +117,7 @@ type Item struct {
 	Description string
 	Owner       IDType
 	Location    Location
+	Attached    bool
 	Attributes  map[string]string
 }
 
