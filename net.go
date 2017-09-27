@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/abiosoft/ishell"
-	"gopkg.in/readline.v1"
+	"github.com/chzyer/readline"
 )
 
 // VersionName is the name of the server.
@@ -50,6 +50,7 @@ const VersionPatch = 1
 const VersionExtra = ""
 
 // VersionString outputs the server's version string.
+//noinspection GoBoolExpressions
 func VersionString() string {
 	s := fmt.Sprintf("%s v%d.%d.%d", VersionName, VersionMajor, VersionMinor, VersionPatch)
 	if VersionExtra != "" {
@@ -120,8 +121,8 @@ func (s *Server) newTLSListener(tlsAddr string) listener {
 	if err != nil {
 		log.Fatal(err)
 	}
-	tls := tls.NewListener(l, s.tlsConfig())
-	r := listener{l: tls}
+	tlsL := tls.NewListener(l, s.tlsConfig())
+	r := listener{l: tlsL}
 
 	tcpL, ok := l.(*net.TCPListener)
 	if ok {
@@ -138,9 +139,11 @@ func (s *Server) StartServer(addr string, tlsAddr string) {
 	listeners = append(listeners, s.newTCPListener(addr))
 	listeners = append(listeners, s.newTLSListener(tlsAddr))
 
-	for _, l := range listeners {
-		defer l.Close()
-	}
+	defer func() {
+		for _, l := range listeners {
+			l.Close()
+		}
+	}()
 
 	for {
 		select {
@@ -219,8 +222,18 @@ func (c *Connection) String() string {
 }
 
 // Log writes a log entry for the given connection.
-func (c *Connection) Log(format string, a ...interface{}) {
+func (c *Connection) Log(s string) {
+	c.Logf(s)
+}
+
+// Logf writes a log entry for the given connection.
+func (c *Connection) Logf(format string, a ...interface{}) {
 	log.Printf("%s | %s\n", c.String(), fmt.Sprintf(format, a...))
+}
+
+// Print writes text to the given connection.
+func (c *Connection) Print(s string) {
+	c.Printf(s)
 }
 
 // Printf writes text to the given connection.
@@ -275,7 +288,7 @@ func connectionWorker(c *Connection) {
 	c.Log("Connection opened")
 	isNew, err := Login(c)
 	if err != nil {
-		c.Log("Authentication Failure: %s", err.Error())
+		c.Logf("Authentication Failure: %s", err.Error())
 		return
 	}
 	createShell(c)
@@ -351,7 +364,7 @@ func Login(c *Connection) (bool, error) {
 
 	fmt.Fprintf(w, "Connected to %s\n\n", VersionString())
 
-	fmt.Fprintf(w, "Username => ")
+	fmt.Fprint(w, "Username => ")
 	w.Flush()
 
 	n, err := r.ReadString('\n')
@@ -364,31 +377,31 @@ func Login(c *Connection) (bool, error) {
 	c.Server.World.FindPlayer <- FindPlayerMessage{Name: playerName, Ack: ack}
 	players := <-ack
 	log.Println(players)
-	isNew := (len(players) == 0)
+	isNew := len(players) == 0
 	log.Println(len(players))
 	var p *Player
 	if isNew {
 		log.Println("New Player")
 		// New Player
 		var pw string
-		fmt.Fprintf(w, "Welcome new player!\n")
-		fmt.Fprintf(w, "When choosing a password, please don't use one you normally use elsewhere.\n")
+		fmt.Fprint(w, "Welcome new player!\n")
+		fmt.Fprint(w, "When choosing a password, please don't use one you normally use elsewhere.\n")
 		w.Flush()
 		for {
 			pw, err = readPassword("Choose Password => ", r, w)
 			if err != nil {
 				return false, err
 			}
-			fmt.Fprintf(w, "\n")
+			fmt.Fprint(w, "\n")
 			pv, err := readPassword("Retype Password => ", r, w)
 			if err != nil {
 				return false, err
 			}
-			fmt.Fprintf(w, "\n")
+			fmt.Fprint(w, "\n")
 			if pw == pv {
 				break
 			} else {
-				_, err = fmt.Fprintf(w, "Passwords didn't match, please try again.\n")
+				_, err = fmt.Fprint(w, "Passwords didn't match, please try again.\n")
 				if err != nil {
 					return false, err
 				}
@@ -410,19 +423,19 @@ func Login(c *Connection) (bool, error) {
 			if err != nil {
 				return false, err
 			}
-			fmt.Fprintf(w, "\n")
+			fmt.Fprint(w, "\n")
 			if c.checkPassword(p.ID, pw) {
 				break
 			} else if i >= 3 {
-				fmt.Fprintf(w, "Authentication failed.\n")
+				fmt.Fprint(w, "Authentication failed.\n")
 				w.Flush()
 				c.C.Close()
-				return false, fmt.Errorf("Authentication Failed: %s", p.Name)
+				return false, fmt.Errorf("authentication failed: %s", p.Name)
 			}
 		}
 	}
 	if p == nil {
-		return false, errors.New("Player Not Found")
+		return false, errors.New("player not found")
 	}
 	c.Player = p
 	c.Authenticated = true
@@ -626,7 +639,7 @@ func (c *Connection) DestroyExit(id IDType) *Exit {
 	if ex == nil {
 		return nil
 	}
-	
+
 	ack := make(chan bool)
 	c.Server.World.DestroyExit <- DestroyExitMessage{Room: room, ID: id, Ack: ack}
 	<-ack

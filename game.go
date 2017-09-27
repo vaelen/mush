@@ -192,7 +192,7 @@ type World struct {
 
 	NewExit     chan NewExitMessage
 	DestroyExit chan DestroyExitMessage
-	
+
 	FindItem    chan FindItemMessage
 	NewItem     chan NewItemMessage
 	DestroyItem chan DestroyItemMessage
@@ -325,8 +325,8 @@ type NewRoomMessage struct {
 // DestroyRoomMessage is sent to DestroyRoom to destroy a room.
 type DestroyRoomMessage struct {
 	Room IDType
-	ID  IDType
-	Ack chan bool
+	ID   IDType
+	Ack  chan bool
 }
 
 // NewExitMessage is sent to NewExit to create a new exit.
@@ -340,8 +340,8 @@ type NewExitMessage struct {
 // DestroyExitMessage is sent to DestroyExit to destroy an exit.
 type DestroyExitMessage struct {
 	Room IDType
-	ID  IDType
-	Ack chan bool
+	ID   IDType
+	Ack  chan bool
 }
 
 // FindItemMessage is sent to FindItem to find a set of items.
