@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
+along with Vaelen/MUSH.  If not, see <http://www.gnu.org/licenses/>.
 ******/
 
 package mush
@@ -68,6 +68,7 @@ type Connection struct {
 	Authenticated bool
 	Connected     time.Time
 	LastActed     time.Time
+	ScriptingEnv  *ScriptingEnv
 }
 
 // Server represents a server instance.
@@ -197,6 +198,7 @@ func (s *Server) newConnection(conn net.Conn) *Connection {
 		Connected: time.Now(),
 		LastActed: time.Now(),
 	}
+	c.ScriptingEnv = c.newScriptingEnv()
 	ack := make(chan bool)
 	s.cm.Opened <- ConnectionStateChange{c: c, ack: ack}
 	<-ack
@@ -225,16 +227,23 @@ func (c *Connection) Log(format string, a ...interface{}) {
 
 // Printf writes text to the given connection.
 func (c *Connection) Printf(format string, a ...interface{}) {
-	// TODO: Replace this with a channel message.
-	if c.Shell != nil {
-		c.Shell.Printf(format, a...)
+	if c != nil {
+		c.Print(fmt.Sprintf(format, a...))
 	}
 }
 
 // Println writes text to the given connection, followed by a new line character.
 func (c *Connection) Println(message string) {
 	if c != nil {
-		c.Printf(message + "\n")
+		c.Print(message + "\n")
+	}
+}
+
+// Print writes the text to the given connection without transforming it.
+func (c *Connection) Print(a ...interface{}) {
+	if c != nil && c.Shell != nil {
+		// TODO: Replace this with a channel message.
+		c.Shell.Print(a...)
 	}
 }
 
@@ -626,7 +635,7 @@ func (c *Connection) DestroyExit(id IDType) *Exit {
 	if ex == nil {
 		return nil
 	}
-	
+
 	ack := make(chan bool)
 	c.Server.World.DestroyExit <- DestroyExitMessage{Room: room, ID: id, Ack: ack}
 	<-ack
@@ -909,4 +918,34 @@ func (c *Connection) setPassword(id IDType, pw string) bool {
 	ack := make(chan bool)
 	c.Server.World.SetPassword <- PasswordMessage{ID: id, Password: pw, Ack: ack}
 	return <-ack
+}
+
+// ExecuteScriptWithScope executes the given code within the given scope.
+func (c *Connection) ExecuteScriptWithScope(scope map[string]interface{}, code string) error {
+	if c == nil || c.ScriptingEnv == nil {
+		c.Log("Couldn't Execute Script")
+		return fmt.Errorf("Couldn't Execute Script")
+	}
+
+	return c.ScriptingEnv.Execute(scope, code)
+}
+
+// ExecuteScript executes the given code.
+func (c *Connection) ExecuteScript(code string) error {
+	if c == nil || c.ScriptingEnv == nil {
+		c.Log("Couldn't Execute Script")
+		return fmt.Errorf("Couldn't Execute Script")
+	}
+	scope := make(map[string]interface{})
+	return c.ScriptingEnv.Execute(scope, code)
+}
+
+// TestScriptingEnvironment tests that the scripting environment is functioning properly.
+func (c *Connection) TestScriptingEnvironment() error {
+	if c == nil || c.ScriptingEnv == nil {
+		c.Log("Couldn't Execute Script")
+		return fmt.Errorf("Couldn't Execute Script")
+	}
+
+	return c.ScriptingEnv.Test()
 }

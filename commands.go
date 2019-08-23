@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
+along with Vaelen/MUSH.  If not, see <http://www.gnu.org/licenses/>.
 ******/
 
 package mush
@@ -193,7 +193,7 @@ func addCommands(c *Connection) {
 						c.Println("Couldn't Create Exit")
 					} else {
 						c.Printf("New Exit Created: %s\n", e.String())
-					}					
+					}
 				default:
 					c.Println(e.Cmd.HelpText())
 				}
@@ -246,7 +246,7 @@ func addCommands(c *Connection) {
 			}
 		},
 	})
-	
+
 	shell.AddCmd(&ishell.Cmd{
 		Name: "list",
 		Help: "List your rooms or items. Usage: list <rooms|items|players>",
@@ -360,7 +360,7 @@ func addCommands(c *Connection) {
 			}
 		},
 	})
-	
+
 	shell.AddCmd(&ishell.Cmd{
 		Name: "go",
 		Help: "Go somewhere.  Usage: go <direction>",
@@ -386,7 +386,37 @@ func addCommands(c *Connection) {
 			}
 		},
 	})
-	
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "test-scripting",
+		Help: "Tests that the scripting environment is working properly.",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			err := c.TestScriptingEnvironment()
+			if err != nil {
+				c.Printf("Error Executing Script: %s\n", err.Error())
+			} else {
+				c.Printf("Script Executed Sucessfully.\n")
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "exec",
+		Help: "Executes a script. Usage: exec <code block>",
+		Func: func(e *ishell.Context) {
+			c.updateIdleTime()
+			if len(e.Args) > 0 {
+				err := c.ExecuteScript(e.Args[0])
+				if err != nil {
+					c.Printf("Error Executing Script: %s\n", err.Error())
+				}
+			} else {
+				c.Println(e.Cmd.HelpText())
+			}
+		},
+	})
+
 }
 
 // IsAdmin returns true if the player is an admin.
@@ -662,7 +692,6 @@ func (c *Connection) ListPlayers(players []*Player) {
 	c.Printf(s)
 }
 
-
 // ListRooms displays a list of the given rooms.
 func (c *Connection) ListRooms(rooms []*Room) {
 	s := fmt.Sprintf("%10s %30s\n", "ID", "Room Name")
@@ -807,7 +836,7 @@ func (c *Connection) findTarget(target string) fmt.Stringer {
 	}
 
 	l := len(targets)
-	
+
 	switch {
 	case l > 1:
 		// Multiple items found
@@ -824,7 +853,7 @@ func (c *Connection) findTarget(target string) fmt.Stringer {
 		// No items found
 		c.Printf("That is not here.\n")
 	}
-	
+
 	return nil
 }
 
@@ -899,7 +928,7 @@ func (c *Connection) setItem(i *Item, field string, value string) {
 		i.Attached = b
 	default:
 		c.Printf("Can't set %s on %s.\n", field, i)
-		supportedFields := []string {
+		supportedFields := []string{
 			"name", "(desc)ription", "owner", "attached",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
@@ -924,7 +953,7 @@ func (c *Connection) setPlayer(p *Player, field string, value string) {
 		p.Description = value
 	default:
 		c.Printf("Can't set %s on %s.\n", field, p)
-		supportedFields := []string {
+		supportedFields := []string{
 			"(desc)ription",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
@@ -993,7 +1022,7 @@ func (c *Connection) setExit(e *Exit, field string, value string) {
 		e.Owner = id
 	default:
 		c.Printf("Can't set %s on %s.\n", field, e)
-		supportedFields := []string {
+		supportedFields := []string{
 			"name", "(desc)ription", "(long)description",
 			"(arrive)message", "(leave)message", "(dest)ination",
 			"owner",
@@ -1034,7 +1063,7 @@ func (c *Connection) setRoom(r *Room, field string, value string) {
 		r.Owner = id
 	default:
 		c.Printf("Can't set %s on %s.\n", field, r)
-		supportedFields := []string {
+		supportedFields := []string{
 			"name", "(desc)ription", "owner",
 		}
 		c.Printf("Fields: %s\n", strings.Join(supportedFields, ", "))
@@ -1086,11 +1115,11 @@ func (c *Connection) Summon(target string) {
 			return
 		}
 		/*
-		e, ok := t.(*Exit)
-		if ok {
-			return
-		}
-        */
+			e, ok := t.(*Exit)
+			if ok {
+				return
+			}
+		*/
 		r, ok := t.(*Room)
 		if ok {
 			c.Move(Location{Type: LocationRoom, ID: r.ID}, "%s dissapears suddenly.", "%s appears suddenly.")
@@ -1170,11 +1199,11 @@ func (c *Connection) showPlayer(p *Player) string {
 	s += fmt.Sprintf(f, "LastActed", p.LastActed)
 	s += fmt.Sprintf(f, "Attributes", "")
 	/*
-	for k, v := range p.Attributes {
-		s += fmt.Sprintf(a, k, v)
-	}
-    */
-	return s	
+		for k, v := range p.Attributes {
+			s += fmt.Sprintf(a, k, v)
+		}
+	*/
+	return s
 }
 
 func (c *Connection) showExit(e *Exit) string {
