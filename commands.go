@@ -58,7 +58,7 @@ func addCommands(c *Connection) {
 					target = ""
 					phrase = e.Args[0]
 				}
-				c.Log("Executing Say: %s - %s", target, phrase)
+				c.Logf("Executing Say: %s - %s", target, phrase)
 				c.Say(target, phrase, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())
@@ -77,7 +77,7 @@ func addCommands(c *Connection) {
 				c.updateIdleTime()
 				target := e.Args[0]
 				phrase := e.Args[1]
-				c.Log("Executing Whisper: %s - %s", target, phrase)
+				c.Logf("Executing Whisper: %s - %s", target, phrase)
 				c.Whisper(target, phrase, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())
@@ -95,7 +95,7 @@ func addCommands(c *Connection) {
 			if len(e.Args) > 0 {
 				c.updateIdleTime()
 				action := e.Args[0]
-				c.Log("Executing Emote: %s", action)
+				c.Logf("Executing Emote: %s", action)
 				c.Emote(action, &c.Player.Location)
 			} else {
 				c.Println(e.Cmd.HelpText())

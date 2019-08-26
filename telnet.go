@@ -31,6 +31,7 @@ type TelnetInterceptor struct {
 	Debug bool
 }
 
+//noinspection GoUnusedConst
 const (
 	escapeSe    byte = 240
 	escapeNoOp  byte = 241

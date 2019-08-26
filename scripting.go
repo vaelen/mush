@@ -90,7 +90,7 @@ func (c *Connection) newScriptingEnv() *ScriptingEnv {
 	anko_time.Import(vm)
 
 	// Redefine functions
-	vm.Define("print", c.Print)
+	vm.Define("print", c.Printf)
 	vm.Define("printf", c.Printf)
 	vm.Define("println", c.Println)
 	vm.Define("sprintf", fmt.Sprintf)
