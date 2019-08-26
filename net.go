@@ -233,11 +233,6 @@ func (c *Connection) Logf(format string, a ...interface{}) {
 	log.Printf("%s | %s\n", c.String(), fmt.Sprintf(format, a...))
 }
 
-// Print writes text to the given connection.
-func (c *Connection) Print(s string) {
-	c.Printf(s)
-}
-
 // Printf writes text to the given connection.
 func (c *Connection) Printf(format string, a ...interface{}) {
 	if c != nil {

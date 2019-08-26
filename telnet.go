@@ -50,6 +50,10 @@ const (
 	escapeIac   byte = 255
 )
 
+func (t TelnetInterceptor) Close() (err error) {
+	return nil
+}
+
 func (t TelnetInterceptor) Read(p []byte) (n int, err error) {
 	buf := make([]byte, len(p), cap(p))
 	n, err = t.i.Read(buf)
